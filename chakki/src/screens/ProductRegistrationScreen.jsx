@@ -15,13 +15,14 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Camera } from 'react-native-camera-kit';
 import Feather from 'react-native-vector-icons/Feather';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const parseQR = (raw) => {
   if (!raw) return null;
   const result = {};
 
   const patterns = [
-    { key: 'deviceName', regex: /Device Name\s*:\s*(.*?)\s*(?=Model No\s*:|$)/i },
+    { key: 'productName', regex: /Device Name\s*:\s*(.*?)\s*(?=Model No\s*:|$)/i },
     { key: 'modelNo', regex: /Model No\s*:\s*(.*?)\s*(?=Serial No\s*:|$)/i },
     { key: 'serialNo', regex: /Serial No\s*:\s*(.*?)\s*(?=MAC ID\s*:|$)/i },
     { key: 'macId', regex: /MAC ID\s*:\s*(.*?)\s*(?=MDF By\s*:|$)/i },
@@ -34,7 +35,9 @@ const parseQR = (raw) => {
     }
   });
 
-  return result;
+  console.log("PARSED QR DATA: ", result)
+
+  return Object.keys(result).length > 0 ? result : null;
 };
 
 const ProductRegistrationScreen = ({ navigation }) => {
@@ -42,9 +45,11 @@ const ProductRegistrationScreen = ({ navigation }) => {
   const [isCameraActive, setIsCameraActive] = useState(false);
 
   // Form Fields
-  const [serialNo, setSerialNo] = useState('SN-45879234');
-  const [modelNo, setModelNo] = useState('MODEL-X200');
-  const [macId, setMacId] = useState('00:1A:C2:7B:9F:11');
+  const [productName, setProductName] = useState('')
+  const [serialNo, setSerialNo] = useState('');
+  const [modelNo, setModelNo] = useState('');
+  const [macId, setMacId] = useState('');
+  const [customerId, setCustomerId] = useState(null);
 
   // Date State
   const [purchaseDate, setPurchaseDate] = useState(new Date());
@@ -52,6 +57,21 @@ const ProductRegistrationScreen = ({ navigation }) => {
 
   // Scan line animation
   const scanAnimation = useRef(new Animated.Value(0)).current;
+
+  // Retrieve stored customer_id when screen mounts
+  useEffect(() => {
+    const fetchCustomerId = async () => {
+      try {
+        const storedId = await AsyncStorage.getItem('customer_id');
+        if (storedId) {
+          setCustomerId(storedId);
+        }
+      } catch (error) {
+        console.error('Failed to load customer ID', error);
+      }
+    };
+    fetchCustomerId();
+  }, []);
 
   useEffect(() => {
     if (isCameraActive) {
@@ -74,9 +94,29 @@ const ProductRegistrationScreen = ({ navigation }) => {
 
   const onReadCode = (event) => {
     const qrData = event.nativeEvent.codeStringValue;
+
+    console.log("QR Scanned: ", qrData)
+
+    if (!qrData) {
+      Alert.alert('Invalid QR', 'QR code data is empty.');
+      return;
+    }
+
+
     const parsed = parseQR(qrData);
 
+    console.log("PARSED DATA:", parsed);
+
+    if (!parsed) {
+      Alert.alert(
+        'Invalid QR',
+        'QR Code format is not valid.'
+      );
+      return;
+    }
+
     if (parsed) {
+      if (parsed.productName) setProductName(parsed.productName);
       if (parsed.serialNo) setSerialNo(parsed.serialNo);
       if (parsed.modelNo) setModelNo(parsed.modelNo);
       if (parsed.macId) setMacId(parsed.macId);
@@ -87,24 +127,62 @@ const ProductRegistrationScreen = ({ navigation }) => {
     }
   };
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     if (!serialNo.trim() || !modelNo.trim() || !macId.trim()) {
       Alert.alert('Validation Error', 'Please complete all product fields.');
       return;
     }
 
-    Alert.alert(
-      'Product Registered',
-      `Serial: ${serialNo}\nModel: ${modelNo}\nMAC: ${macId}`,
-      [
-        {
-          text: 'OK',
-          onPress: () => navigation?.goBack(),
+    if (!customerId) {
+      Alert.alert('Error', 'User session not found. Please log in again.');
+      return;
+    }
+
+    try {
+      const response = await fetch('http://192.168.1.27:5001/register-product', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-      ]
-    );
+        body: JSON.stringify({
+          customer_id: customerId,
+          product_name: productName,
+          serial_number: serialNo,
+          model_number: modelNo,
+          mac_id: macId,
+          purchase_date: formatDateForAPI(purchaseDate),
+        }),
+      });
+
+      const data = await response.json();
+
+      if(response.status === 409){
+        Alert.alert('Device Already Registered' ,
+          data.error || 'This device is already registered.'
+        )
+      }
+
+      if (response.ok) {
+        Alert.alert(
+          'Success',
+          data.message || 'Product Registered Successfully',
+          [
+            {
+              text: 'OK',
+              onPress: () => navigation?.goBack(),
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Registration Failed', data.error || 'Something went wrong.');
+      }
+    } catch (error) {
+      console.error('Registration Error:', error);
+      Alert.alert('Network Error', 'Unable to connect to the server. Please try again.');
+    }
   };
 
+  // Helper function to format date for display on UI (DD-MM-YYYY)
   const formatDate = (date) => {
     const day = String(date.getDate()).padStart(2, '0');
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -112,11 +190,19 @@ const ProductRegistrationScreen = ({ navigation }) => {
     return `${day}-${month}-${year}`;
   };
 
+  // Helper function to format date as YYYY-MM-DD for Flask/MySQL
+  const formatDateForAPI = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   return (
     <SafeAreaView style={styles.safeContainer}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* Top Header Bar with extra top spacing */}
+      {/* Top Header Bar */}
       <View style={styles.headerBar}>
         <TouchableOpacity
           style={styles.backButton}
@@ -235,6 +321,25 @@ const ProductRegistrationScreen = ({ navigation }) => {
         <View style={styles.formContainer}>
           <Text style={styles.sectionHeader}>PRODUCT DETAILS</Text>
 
+
+          {/* Product Name */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Product Name</Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.textInput}
+                value={productName}
+                onChangeText={setProductName}
+                placeholder="XXXXX"
+                placeholderTextColor="#94A3B8"
+                editable={mode === 'manual'}
+              />
+              {mode === 'scan' && (
+                <Feather name="lock" size={16} color="#94A3B8" />
+              )}
+            </View>
+          </View>
+
           {/* Serial Number */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Serial Number</Text>
@@ -340,8 +445,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
-
-  /* Header Bar with explicit padding to push Back Button & Title down */
   headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -367,14 +470,12 @@ const styles = StyleSheet.create({
   headerRightPlaceholder: {
     width: 40,
   },
-
   scrollContent: {
     paddingTop: 28,
     paddingLeft: 24,
     paddingRight: 24,
     paddingBottom: 120,
   },
-
   segmentedControl: {
     flexDirection: 'row',
     backgroundColor: '#E2E8F0',
@@ -408,7 +509,6 @@ const styles = StyleSheet.create({
     color: '#522D70',
     fontWeight: '700',
   },
-
   scannerContainer: {
     marginBottom: 28,
   },
@@ -469,7 +569,6 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 20,
   },
-
   formContainer: {
     gap: 20,
   },
@@ -511,7 +610,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#0F172A',
   },
-
   footerBranding: {
     textAlign: 'center',
     fontSize: 11,
@@ -520,7 +618,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginTop: 36,
   },
-
   bottomActionBar: {
     position: 'absolute',
     bottom: 0,

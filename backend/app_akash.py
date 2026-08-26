@@ -46,7 +46,7 @@ def get_cursor():
             host="localhost",
             user="root",
             password="root",
-            database="wheat_grinder"
+            database="wheat1"
         )
     cursor = db.cursor(dictionary=True)
     return cursor
@@ -69,31 +69,19 @@ CREATE TABLE IF NOT EXISTS customers (
 """)
 
 
-
 cur.execute("""
 CREATE TABLE IF NOT EXISTS product_registrations (
     id              INT PRIMARY KEY AUTO_INCREMENT,
-    customer_id INT NOT NULL,
-    customer_name VARCHAR(100) NOT NULL,
-    customer_mobile VARCHAR(15),
-    customer_email VARCHAR(100),
-
-    
-    product_id VARCHAR(100),
-    product_name VARCHAR(150),
-    serial_number VARCHAR(100),
-    device_id VARCHAR(100),
-    model_number VARCHAR(100),
-    mac_id VARCHAR(100),
-
-    purchase_date DATE NOT NULL,
-
-    warranty_years INT DEFAULT 1,
+    customer_id     INT,
+    product_name    VARCHAR(150),
+    serial_number   VARCHAR(100),
+    model_number    VARCHAR(100),
+    mac_id          VARCHAR(100),
+    purchase_date   DATE,
+    warranty_years  INT DEFAULT 1,
     warranty_expiry DATE,
-
-    is_registered BOOLEAN DEFAULT TRUE,
-
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    is_registered   BOOLEAN DEFAULT TRUE,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 """)
 
@@ -477,10 +465,10 @@ def login_customer():
             if check_password_hash(customer['password'], password):
                 return jsonify({
                     "message": "Login Successfull",
-                    "customer_id": customer["customer_id"],
-                    "name"   : customer['name'],      # ✅ add
-                    "mobile" : customer['mobile'],    # ✅ add
-                    "email"  : customer['email']      # ✅ add
+                    "customer_id": customer['customer_id'],    
+                    "name"   : customer['name'],
+                    "mobile" : customer['mobile'],
+                    "email"  : customer['email']
                 }), 200
             else:
                 return jsonify({"error": "Invalid Password"}), 401
@@ -564,241 +552,81 @@ def product_page(device_id):
         "model_number"  : product.get("model_number", "N/A"),
         "mac_id"        : product.get("mac_id", "N/A"),
     })
-    
-    
-    
-@app.route('/customer/<int:customer_id>', methods=['GET'])
-def get_customer(customer_id):
-
-    try:
-        cur = get_cursor()
-
-        cur.execute("""
-            SELECT
-                customer_id,
-                name,
-                mobile,
-                email
-            FROM customers
-            WHERE customer_id = %s
-        """, (customer_id,))
-
-        customer = cur.fetchone()
-
-        if not customer:
-            return jsonify({
-                "error": "Customer not found"
-            }), 404
-
-        return jsonify({
-            "customer_id": customer["customer_id"],
-            "name": customer["name"],
-            "mobile": customer["mobile"],
-            "email": customer["email"]
-        }), 200
-
-    except Exception as e:
-
-        print("[CUSTOMER FETCH ERROR]", e)
-
-        return jsonify({
-            "error": str(e)
-        }), 500
  
-
-
-
-
-
 
 @app.route('/register-product', methods=['POST'])
 def register_product():
-
     try:
-        data = request.get_json()
+        data            = request.get_json()
+        customer_id     = data.get("customer_id")
+        product_name    = data.get("product_name")
+        serial_number   = data.get("serial_number")
+        model_number    = data.get("model_number")
+        mac_id          = data.get("mac_id")
+        purchase_date   = data.get("purchase_date")
 
-        # -----------------------------
-        # Customer details
-        # -----------------------------
-        customer_id = data.get("customer_id")
-        customer_name = data.get("customer_name", "").strip()
-        customer_mobile = data.get("customer_mobile", "").strip()
-        customer_email = data.get("customer_email", "").strip()
-
-        # -----------------------------
-        # Product details
-        # -----------------------------
-        product_id = data.get("product_id", "").strip()
-        product_name = data.get("product_name", "").strip()
-        serial_number = data.get("serial_number", "").strip()
-        device_id = data.get("device_id", "").strip()
-        model_number = data.get("model_number", "").strip()
-        mac_id = data.get("mac_id", "").strip()
-
-        purchase_date = data.get("purchase_date")
-        warranty_years = data.get("warranty_years", 1)
-
-        # -----------------------------
-        # Validation
-        # -----------------------------
-        if not customer_name:
-            return jsonify({
-                "error": "Customer name is required"
-            }), 400
-
-        if not device_id:
-            return jsonify({
-                "error": "Device ID is required"
-            }), 400
-
-        if not product_name:
-            return jsonify({
-                "error": "Product name is required"
-            }), 400
+        if not customer_id:
+            return jsonify({"error": "Customer ID is required"}), 400
 
         if not serial_number:
-            return jsonify({
-                "error": "Serial number is required"
-            }), 400
-
+            return jsonify({"error": "Serial number is required"}), 400
+        
         if not purchase_date:
             return jsonify({
-                "error": "Purchase date is required"
-            }), 400
+                "error" : "Purchase data is required"
+            }),400
 
-        # -----------------------------
-        # Database
-        # -----------------------------
         cur = get_cursor()
-
-        # Check if this product is already registered
+        
         cur.execute("""
-            SELECT *
+            SELECT id
             FROM product_registrations
-            WHERE device_id = %s
+            WHERE serial_number = %s
             LIMIT 1
-        """, (device_id,))
+        """, (serial_number,))
 
-        existing_product = cur.fetchone()
+        existing_device = cur.fetchone()
 
-        if existing_product:
-
+        if existing_device:
             return jsonify({
-                "error": "This product is already registered.",
-                "customer_name": existing_product["customer_name"],
-                "serial_number": existing_product["serial_number"],
-                "device_id": existing_product["device_id"]
-            }), 400
+                "error": "This device is already registered.",
+                "serial_number": serial_number
+            }), 409
 
-        # -----------------------------
-        # Purchase date
-        # -----------------------------
-        try:
-            purchase_date_obj = datetime.strptime(
-                purchase_date,
-                "%Y-%m-%d"
-            )
+        purchase_date_obj = datetime.strptime(purchase_date, "%Y-%m-%d")
+        warranty_years = 1  
+        warranty_expiry   = purchase_date_obj + timedelta(days=365 * warranty_years)
 
-        except ValueError:
-            return jsonify({
-                "error": "Purchase date must be YYYY-MM-DD"
-            }), 400
-
-        # -----------------------------
-        # Warranty
-        # -----------------------------
-        warranty_years = int(warranty_years)
-
-        warranty_expiry = purchase_date_obj + timedelta(
-            days=365 * warranty_years
-        )
-
-        # -----------------------------
-        # Insert directly
-        # -----------------------------
         cur.execute("""
             INSERT INTO product_registrations
-            (
-                customer_id,
-                customer_name,
-                customer_mobile,
-                customer_email,
-
-                product_id,
-                product_name,
-                serial_number,
-                device_id,
-                model_number,
-                mac_id,
-
-                purchase_date,
-                warranty_years,
-                warranty_expiry,
-                is_registered
-            )
-            VALUES
-            (
-                %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, TRUE
-            )
+            (customer_id, product_name, serial_number, model_number, mac_id, purchase_date, warranty_years, warranty_expiry, is_registered)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             customer_id,
-            customer_name,
-            customer_mobile,
-            customer_email,
-
-            product_id,
             product_name,
             serial_number,
-            device_id,
             model_number,
             mac_id,
-
             purchase_date_obj.date(),
             warranty_years,
-            warranty_expiry.date()
+            warranty_expiry.date(),
+            True
         ))
 
         db.commit()
 
         return jsonify({
-            "message": "Product registered successfully",
-
-            "product": {
-                "product_id": product_id,
-                "product_name": product_name,
-                "serial_number": serial_number,
-                "device_id": device_id,
-                "model_number": model_number,
-                "mac_id": mac_id,
-
-                "customer_name": customer_name,
-                "customer_mobile": customer_mobile,
-                "customer_email": customer_email,
-
-                "purchase_date": str(
-                    purchase_date_obj.date()
-                ),
-
-                "warranty_years": warranty_years,
-
-                "warranty_expiry": str(
-                    warranty_expiry.date()
-                )
-            }
-        }), 201
+            "message"        : "Product Registered Successfully",
+            "serial_number"  : serial_number,
+            "purchase_date"  : str(purchase_date_obj.date()),
+            "warranty_expiry": str(warranty_expiry.date()),
+        }), 200
 
     except Exception as e:
+        print(f"[REGISTER] 💥 ERROR: {e}")
+        return jsonify({"error": str(e)}), 500
 
-        db.rollback()
-
-        print("[REGISTER PRODUCT ERROR]", e)
-
-        return jsonify({
-            "error": str(e)
-        }), 500
-
+        
 
 
 # Replace your existing /warranty/<serial_number> route with this:
@@ -811,27 +639,26 @@ def check_warranty(serial_number):
         print(f"[WARRANTY] Request aaya serial: '{serial_number}'")
         print(f"{'='*50}")
 
+        # Updated query matching your new single-table / joined customer structure
         cur.execute("""
             SELECT
-                p.product_name,
-                p.serial_number,
-                COALESCE(p.model_number, 'N/A') AS model_number,
-                COALESCE(p.mac_id,       'N/A') AS mac_id,
-                pr.customer_name,
-                pr.customer_mobile,
+                pr.product_name,
+                pr.serial_number,
+                COALESCE(pr.model_number, 'N/A') AS model_number,
+                COALESCE(pr.mac_id,       'N/A') AS mac_id,
+                c.name AS customer_name,
+                c.mobile AS customer_mobile,
                 pr.purchase_date,
                 pr.warranty_expiry
-            FROM products p
-            JOIN product_registrations pr
-              ON p.product_id = pr.product_id
-            WHERE p.serial_number = %s
+            FROM product_registrations pr
+            LEFT JOIN customers c
+              ON pr.customer_id = c.customer_id
+            WHERE pr.serial_number = %s
             ORDER BY pr.id DESC
             LIMIT 1
         """, (serial_number,))
 
         result = cur.fetchone()
-
-        print(f"[WARRANTY] DB se raw result: {result}")  # 👈 DB ka raw data
 
         if not result:
             print(f"[WARRANTY] ❌ Koi record nahi mila serial '{serial_number}' ke liye")
@@ -848,17 +675,11 @@ def check_warranty(serial_number):
         expiry           = date.fromisoformat(result["warranty_expiry"])
         result["status"] = "active" if expiry >= today else "expired"
 
-        print(f"[WARRANTY] ✅ Final JSON jo frontend ko bhej raha hain:")
-        for key, val in result.items():
-            print(f"           {key:20s} = {val}")
-        print(f"{'='*50}\n")
-
         return jsonify(result), 200
 
     except Exception as e:
         print(f"[WARRANTY] 💥 ERROR: {e}")
         return jsonify({"error": str(e)}), 500
-
 
 
 

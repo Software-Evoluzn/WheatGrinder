@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState } from 'react';
 import {
   View,
@@ -49,6 +50,11 @@ const LoginScreen = ({ navigation }) => {
       );
 
       console.log('Logged in user:', data);
+
+      // ✅ ADD THIS: Save customer_id to local storage securely
+      if (data.customer_id) {
+        await AsyncStorage.setItem('customer_id', String(data.customer_id));
+      }
 
       // Login successful
       Alert.alert(
