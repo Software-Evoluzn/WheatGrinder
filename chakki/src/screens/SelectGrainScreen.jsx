@@ -111,7 +111,7 @@ const SelectGrainScreen = ({ navigation }) => {
                         <TouchableOpacity
                             style={styles.actionBtn}
                             activeOpacity={0.85}
-                            onPress={() => navigation.navigate('GrindSetting', { grainId: selectedGrain })}
+                            onPress={() => navigation.navigate('GrainConfirmationScreen', { grainId: selectedGrain })}
                         >
                             <Text style={styles.actionBtnText}>NEXT</Text>
                         </TouchableOpacity>

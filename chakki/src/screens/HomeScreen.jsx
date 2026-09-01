@@ -70,7 +70,7 @@ const HomeScreen = ({ navigation }) => {
                             <TouchableOpacity
                                 style={styles.startButton}
                                 activeOpacity={0.85}
-                               onPress={() => navigation.navigate('SelectGrain')} // 👈 Navigate here
+                               onPress={() => navigation.navigate('SelfCleaning')} // 👈 Navigate here
                             >
                                 <Text style={styles.startButtonText}>START</Text>
                             </TouchableOpacity>

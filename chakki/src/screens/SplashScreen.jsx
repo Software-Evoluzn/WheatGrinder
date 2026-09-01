@@ -10,7 +10,7 @@ import {
 const SplashScreen = ({ navigation }) => {
   useEffect(() => {
     const timer = setTimeout(() => {
-      navigation.replace('Login');
+      navigation.replace('WelomeScreen');
     }, 3000);
 
     return () => {

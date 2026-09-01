@@ -30,18 +30,24 @@ const GrindSettingScreen = ({ route, navigation }) => {
     if (level < TOTAL_LEVEL_BARS) setLevel((prev) => prev + 1);
   };
 
+  const handleYes = () => {
+    if (navigation?.navigate) {
+      navigation.navigate('CleanStoneChoiceScreen'); // <-- Replace with your START screen name
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Top Header */}
       <View style={styles.headerBar}>
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={styles.iconBtn}
           onPress={() => navigation?.goBack()}
         >
           <Feather name="menu" size={22} color="#3E1A5B" />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
         <Text style={styles.headerTitle}>My Kitchen Tools</Text>
 
@@ -134,9 +140,7 @@ const GrindSettingScreen = ({ route, navigation }) => {
           <TouchableOpacity
             style={styles.startButton}
             activeOpacity={0.85}
-            onPress={() => {
-              // Handle process start logic
-            }}
+            onPress={handleYes} // ✅ Clean & directly invokes handleYes()
           >
             <Text style={styles.startButtonText}>START</Text>
           </TouchableOpacity>
