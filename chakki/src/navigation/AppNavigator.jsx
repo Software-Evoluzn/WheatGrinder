@@ -4,31 +4,20 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import SplashScreen from '../screens/SplashScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
-
 import BottomNavigator from '../screens/BottomTabNavigator';
 import EditProfileScreen from '../screens/EditProfileScreen';
-
 import SelectGrainScreen from '../screens/SelectGrainScreen';
-import GrindingSettingScreen from '../screens/GrindSettingScreen';
 import WelcomeScreen from '../screens/WelcomeScreen';
 import SelfCleaning from '../screens/SelfCleaningScreen';
 import ResumeGrindingScreen from '../screens/ResumeGrindingScreen';
 import CollectionCloth from '../screens/CollectionClothScreen';
 import ConnectWifiScreen from '../screens/ConnectWifiScreen';
-import GrinderSetupFlowScreen from '../screens/GrinderSetupFlowScreen';
-import MotorCalibrationScreen from '../screens/MotorCalibrationScreen';
-import ReadyToCleanScreen from '../screens/ReadyToCleanScreen';
-
-import StoneCleaningProcessScreen from '../screens/StonecleaningprocessScreen';
 import CleaningProcessScreen from '../screens/CleaningProcessScreen';
 import ReadyToInitiateSelfCleaning from '../screens/ReadyToInitiateSelfCleaning';
 import CleanStoneChoiceScreen from '../screens/CleanStoneChoiceScreen';
 import UserChoiceScreen from '../screens/UserChoiceScreen';
-import SetFlowTextureScreen from '../screens/SetFlowTextureScreen';
 import SetGrindTexture from '../screens/SetGrindTexture';
-import StartGrindTexture from '../screens/StartGrindTexture';
 import SetFlowRate from '../screens/SetFlowRate';
-import StartFlowRate from '../screens/StartFlowRate';
 import LoadGrainToStart from '../screens/LoadGrainsToStart';
 import GrainOverScreen from '../screens/GrainOverScreen';
 import MachineOverload from '../screens/MachineOverloadScreen';
@@ -38,6 +27,9 @@ import HighTemperatureScreen from '../screens/HighTemperatureScreen';
 import RemoveMaterialFromHopperScreen from '../screens/RemoveMaterialFromHopperScreen';
 import GrainConfirmationScreen from '../screens/GrainConfirmationScreen';
 import MillingControlScreen from '../screens/MillingControlScreen';
+import VerifyOtpScreen from '../screens/VerifyOtpScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import ResetPasswordScreen from '../screens/ResetPasswordScreen';
 import { StackActions } from '@react-navigation/native';
 
 
@@ -80,6 +72,9 @@ const AppNavigator = () => {
       <Stack.Screen name='PauseScreen' component={PauseScreen} />
       <Stack.Screen name='HighTemperatureScreen' component={HighTemperatureScreen} />
       <Stack.Screen name='RemoveMaterialFromHopperScreen' component={RemoveMaterialFromHopperScreen} />
+      <Stack.Screen name='VerifyOtpScreen' component={VerifyOtpScreen}/>
+      <Stack.Screen name='ForgotPasswordScreen' component={ForgotPasswordScreen}/>
+      <Stack.Screen name='ResetPasswordScreen' component={ResetPasswordScreen}/>
 
     </Stack.Navigator>
   )
