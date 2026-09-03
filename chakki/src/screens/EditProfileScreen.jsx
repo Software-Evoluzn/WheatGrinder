@@ -1,50 +1,38 @@
-import React, { useState, useCallback, useEffect, memo } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
   Switch,
   KeyboardAvoidingView,
-  SafeAreaView,
   Platform,
   Alert,
-  StatusBar,
 } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { useAppTheme } from '../services/theme';
-
-// Rasoi Shop Brand Color Palette
-const RASOI_BRAND = {
-  primary: '#C2410C', // Deep Terracotta / Spice Red
-  primaryDark: '#9A3412',
-  primaryLight: '#FFF7ED', // Warm Cream Background Tint
-  accentGold: '#D97706', // Warm Amber / Saffron
-  statusGreen: '#16A34A',
-  darkCard: '#1C1917', // Cast Iron Warm Black
-};
+import { Screen, MainHeader, Card, PrimaryButton, SecondaryButton } from './ui';
+import { colors, spacing, radii, typography, shadows, layout } from './theme';
 
 /* -------------------------------------------------------------------------- */
-/*  Reusable Sub-Components                                                   */
+/*  Reusable Sub-Components (brand-themed)                                     */
 /* -------------------------------------------------------------------------- */
 
-const SectionCard = memo(({ title, icon, children, style }) => {
-  const { colors } = useAppTheme();
-  const styles = createStyles(colors);
-  return (
-    <View style={[styles.section, style]}>
-      {title ? (
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>{title}</Text>
-          {icon ? <Feather name={icon} size={16} color={RASOI_BRAND.primary} /> : null}
+const SectionCard = memo(({ title, icon, children }) => (
+  <View style={styles.section}>
+    {title ? (
+      <View style={styles.sectionHeaderRow}>
+        <View style={styles.sectionIconChip}>
+          <Feather name={icon} size={15} color={colors.primary} />
         </View>
-      ) : null}
-      <View style={styles.card}>{children}</View>
-    </View>
-  );
-});
+        <Text style={styles.sectionTitle}>{title}</Text>
+      </View>
+    ) : null}
+    <Card padded={false} style={styles.cardInner}>{children}</Card>
+  </View>
+));
 
 const InputField = memo(
   ({
@@ -59,120 +47,73 @@ const InputField = memo(
     onTogglePassword,
     autoCapitalize = 'sentences',
     isLast = false,
-  }) => {
-    const { colors } = useAppTheme();
-    const styles = createStyles(colors);
-    return (
-      <View style={[styles.fieldWrapper, isLast && styles.fieldWrapperLast]}>
-        <Text style={styles.fieldLabel}>{label}</Text>
-        <View style={[styles.inputRow, error && styles.inputRowError]}>
-          <TextInput
-            style={styles.textInput}
-            value={value}
-            onChangeText={onChangeText}
-            placeholder={placeholder}
-            placeholderTextColor={colors.subText}
-            keyboardType={keyboardType}
-            autoCapitalize={autoCapitalize}
-            secureTextEntry={isPassword && !passwordVisible}
-          />
-          {isPassword ? (
-            <TouchableOpacity
-              onPress={onTogglePassword}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Feather
-                name={passwordVisible ? 'eye-off' : 'eye'}
-                size={18}
-                color={colors.subText}
-              />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+  }) => (
+    <View style={[styles.fieldWrapper, isLast && styles.fieldWrapperLast]}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={[styles.inputRow, error && styles.inputRowError]}>
+        <TextInput
+          style={styles.textInput}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textMuted}
+          keyboardType={keyboardType}
+          autoCapitalize={autoCapitalize}
+          secureTextEntry={isPassword && !passwordVisible}
+        />
+        {isPassword ? (
+          <Pressable onPress={onTogglePassword} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Feather name={passwordVisible ? 'eye-off' : 'eye'} size={18} color={colors.textMuted} />
+          </Pressable>
+        ) : null}
       </View>
-    );
-  }
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </View>
+  )
 );
 
-const NotificationSwitch = memo(({ label, subLabel, value, onValueChange, isLast = false }) => {
-  const { colors } = useAppTheme();
-  const styles = createStyles(colors);
-  return (
-    <View>
-      <View style={styles.switchRow}>
-        <View style={styles.switchTextWrapper}>
-          <Text style={styles.deviceLabel}>{label}</Text>
-          {subLabel ? <Text style={styles.deviceSubLabel}>{subLabel}</Text> : null}
-        </View>
-        <Switch
-          value={value}
-          onValueChange={onValueChange}
-          trackColor={{ false: '#E5E7EB', true: RASOI_BRAND.primary }}
-          thumbColor="#FFFFFF"
-          ios_backgroundColor="#E5E7EB"
-        />
-      </View>
-      {!isLast ? <View style={styles.divider} /> : null}
-    </View>
-  );
-});
-
-const ActionButton = memo(({ label, onPress, variant = 'primary', icon }) => {
-  const { colors } = useAppTheme();
-  const styles = createStyles(colors);
-  const isPrimary = variant === 'primary';
-  return (
-    <TouchableOpacity
-      style={[styles.actionButton, isPrimary ? styles.primaryButton : styles.secondaryButton]}
-      activeOpacity={0.85}
-      onPress={onPress}
-    >
+const NotificationSwitch = memo(({ label, subLabel, value, onValueChange, icon, isLast = false }) => (
+  <View>
+    <View style={styles.switchRow}>
       {icon ? (
-        <Feather
-          name={icon}
-          size={16}
-          color={isPrimary ? '#FFFFFF' : colors.text}
-          style={{ marginRight: 8 }}
-        />
+        <View style={styles.rowIconChip}>
+          <Feather name={icon} size={15} color={colors.primary} />
+        </View>
       ) : null}
-      <Text style={isPrimary ? styles.primaryButtonText : styles.secondaryButtonText}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-});
+      <View style={styles.switchTextWrapper}>
+        <Text style={styles.itemLabel}>{label}</Text>
+        {subLabel ? <Text style={styles.itemSubLabel}>{subLabel}</Text> : null}
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        trackColor={{ false: colors.borderStrong, true: colors.primary }}
+        thumbColor="#FFFFFF"
+        ios_backgroundColor={colors.borderStrong}
+      />
+    </View>
+    {!isLast ? <View style={styles.divider} /> : null}
+  </View>
+));
 
-const ProfileHeader = memo(({ name, email, phone, onChangePicture }) => {
-  const { colors } = useAppTheme();
-  const styles = createStyles(colors);
+const ProfileHero = memo(({ name, email, phone, onChangePicture }) => {
   const initial = name ? name.charAt(0).toUpperCase() : 'R';
   return (
-    <View style={styles.identityCard}>
-      <View style={styles.identityTop}>
-        <View style={styles.identityAvatarWrapper}>
-          <View style={styles.identityAvatar}>
-            <Text style={styles.identityAvatarText}>{initial}</Text>
+    <View style={styles.hero}>
+      <View style={styles.heroTop}>
+        <View style={styles.avatarWrapper}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initial}</Text>
           </View>
-          <TouchableOpacity
-            style={styles.editAvatarBadge}
-            activeOpacity={0.85}
-            onPress={onChangePicture}
-          >
-            <Feather name="camera" size={13} color="#FFFFFF" />
-          </TouchableOpacity>
+          <Pressable style={styles.editAvatarBadge} onPress={onChangePicture} accessibilityLabel="Change picture">
+            <Feather name="camera" size={13} color={colors.primary} />
+          </Pressable>
         </View>
 
-        <View style={styles.identityInfo}>
-          <Text style={styles.identityName} numberOfLines={1}>
-            {name || '—'}
-          </Text>
-          <Text style={styles.identityEmail} numberOfLines={1}>
-            {email || '—'}
-          </Text>
-          <Text style={styles.identityPhone} numberOfLines={1}>
-            {phone || '—'}
-          </Text>
+        <View style={styles.heroInfo}>
+          <Text style={styles.heroName} numberOfLines={1}>{name || '—'}</Text>
+          <Text style={styles.heroSub} numberOfLines={1}>{email || '—'}</Text>
+          <Text style={styles.heroSub} numberOfLines={1}>{phone || '—'}</Text>
         </View>
       </View>
     </View>
@@ -184,8 +125,8 @@ const ProfileHeader = memo(({ name, email, phone, onChangePicture }) => {
 /* -------------------------------------------------------------------------- */
 
 const EditProfileScreen = ({ navigation }) => {
-  const { colors, isDark } = useAppTheme();
-  const styles = createStyles(colors);
+  // Kept for the status-bar / dark-mode contract; visuals use brand tokens.
+  const { isDark } = useAppTheme();
 
   // Local static user profile fields
   const [name, setName] = useState('Sejal Sharma');
@@ -254,10 +195,7 @@ const EditProfileScreen = ({ navigation }) => {
     const isValid = validateForm();
 
     if (!isValid) {
-      Alert.alert(
-        'Please fix highlighted fields',
-        'Some information needs your attention.'
-      );
+      Alert.alert('Please fix highlighted fields', 'Some information needs your attention.');
       return;
     }
 
@@ -274,11 +212,13 @@ const EditProfileScreen = ({ navigation }) => {
   }, [navigation]);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.background}
+    <Screen barStyle={isDark ? 'light-content' : 'dark-content'}>
+      <MainHeader
+        title="Edit Profile"
+        onBack={navigation?.goBack ? () => navigation.goBack() : undefined}
+        right={null}
       />
+
       <KeyboardAvoidingView
         style={styles.flexOne}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -290,22 +230,8 @@ const EditProfileScreen = ({ navigation }) => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity
-              style={styles.backButton}
-              activeOpacity={0.8}
-              onPress={() => navigation.goBack()}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Feather name="arrow-left" size={20} color={colors.text} />
-              <Text style={styles.backButtonText}>Back</Text>
-            </TouchableOpacity>
-            <Text style={styles.screenTitle}>Edit Profile</Text>
-          </View>
-
-          {/* Profile Identity Card */}
-          <ProfileHeader
+          {/* Profile Identity Hero */}
+          <ProfileHero
             name={name}
             email={email}
             phone={phone}
@@ -345,40 +271,47 @@ const EditProfileScreen = ({ navigation }) => {
           <SectionCard title="Notifications & Alerts" icon="bell">
             <NotificationSwitch
               label="SMS Alerts"
-              subLabel="Receive recipe & appliance updates via text"
+              subLabel="Get grinding and maintenance alerts by text"
               value={smsEnabled}
               onValueChange={setSmsEnabled}
+              icon="message-square"
             />
             <NotificationSwitch
               label="Email Alerts"
-              subLabel="Receive order & service updates via email"
+              subLabel="Get service and maintenance updates by email"
               value={emailEnabled}
               onValueChange={setEmailEnabled}
+              icon="mail"
               isLast
             />
           </SectionCard>
 
-          {/* Appliances Preference */}
-          <SectionCard title="My Appliances" icon="cpu">
+          {/* Devices */}
+          <SectionCard title="My Devices" icon="cpu">
             <View style={styles.deviceRow}>
-              <View>
-                <Text style={styles.deviceLabel}>Registered Kitchen Devices</Text>
-                <Text style={styles.deviceSubLabel}>Connected to your Rasoi account</Text>
+              <View style={styles.rowIconChip}>
+                <Feather name="hard-drive" size={15} color={colors.primary} />
               </View>
-              <Text style={styles.deviceCount}>{accountInfo.registeredDevices}</Text>
+              <View style={{ flex: 1, paddingRight: spacing.md }}>
+                <Text style={styles.itemLabel}>Registered Machines</Text>
+                <Text style={styles.itemSubLabel}>Connected to your Rasoi account</Text>
+              </View>
+              <View style={styles.countPill}>
+                <Text style={styles.countPillText}>{accountInfo.registeredDevices}</Text>
+              </View>
             </View>
           </SectionCard>
 
           {/* Action Buttons */}
           <View style={styles.buttonGroup}>
-            <ActionButton label="Save Changes" onPress={handleSave} variant="primary" icon="check" />
-            <ActionButton label="Cancel" onPress={handleCancel} variant="secondary" />
+            <PrimaryButton title="Save Changes" icon="check" onPress={handleSave} />
+            <SecondaryButton title="Cancel" onPress={handleCancel} style={{ marginTop: spacing.md }} />
           </View>
 
           <Text style={styles.version}>Rasoi Shop App v1.0.0</Text>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </Screen>
   );
 };
 
@@ -388,278 +321,142 @@ export default EditProfileScreen;
 /*  Styles                                                                    */
 /* -------------------------------------------------------------------------- */
 
-const createStyles = (colors) =>
-  StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    flexOne: {
-      flex: 1,
-    },
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    contentContainer: {
-      paddingHorizontal: 24,
-      paddingTop: 36, // Increased top padding for better breathing space
-      paddingBottom: 48,
-    },
+const styles = StyleSheet.create({
+  flexOne: { flex: 1 },
+  container: { flex: 1 },
+  contentContainer: {
+    paddingHorizontal: layout.screenPaddingHorizontal,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.huge,
+  },
 
-    // Header
-    header: {
-      marginBottom: 24,
-    },
-    backButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      alignSelf: 'flex-start',
-      marginBottom: 12,
-    },
-    backButtonText: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: colors.text,
-      marginLeft: 6,
-    },
-    screenTitle: {
-      fontSize: 32,
-      fontWeight: '800',
-      color: colors.text,
-      letterSpacing: -0.6,
-    },
+  // Profile hero (brand purple)
+  hero: {
+    backgroundColor: colors.primary,
+    borderRadius: radii.xxl,
+    padding: spacing.xl,
+    marginBottom: spacing.xxl,
+    ...shadows.card,
+  },
+  heroTop: { flexDirection: 'row', alignItems: 'center' },
+  avatarWrapper: { position: 'relative', marginRight: spacing.lg },
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.28)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: { fontSize: 26, fontWeight: '800', color: colors.textOnPrimary },
+  editAvatarBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  heroInfo: { flex: 1 },
+  heroName: { fontSize: 18, fontWeight: '800', color: colors.textOnPrimary, marginBottom: 3 },
+  heroSub: { fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.72)', marginBottom: 2 },
 
-    // Identity Card (Rasoi Dark Cast Iron Style)
-    identityCard: {
-      backgroundColor: RASOI_BRAND.darkCard,
-      borderRadius: 24,
-      padding: 22,
-      marginBottom: 28,
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.15,
-      shadowRadius: 20,
-      elevation: 4,
-      borderWidth: 1,
-      borderColor: 'rgba(217, 119, 6, 0.2)',
-    },
-    identityTop: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    identityAvatarWrapper: {
-      position: 'relative',
-      marginRight: 16,
-    },
-    identityAvatar: {
-      width: 68,
-      height: 68,
-      borderRadius: 34,
-      backgroundColor: RASOI_BRAND.primary,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    identityAvatarText: {
-      fontSize: 26,
-      fontWeight: '800',
-      color: '#FFFFFF',
-    },
-    editAvatarBadge: {
-      position: 'absolute',
-      bottom: -2,
-      right: -2,
-      width: 26,
-      height: 26,
-      borderRadius: 13,
-      backgroundColor: RASOI_BRAND.accentGold,
-      justifyContent: 'center',
-      alignItems: 'center',
-      borderWidth: 2,
-      borderColor: RASOI_BRAND.darkCard,
-    },
-    identityInfo: {
-      flex: 1,
-    },
-    identityName: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: '#FFFFFF',
-      marginBottom: 3,
-    },
-    identityEmail: {
-      fontSize: 13,
-      fontWeight: '400',
-      color: 'rgba(255,255,255,0.6)',
-      marginBottom: 2,
-    },
-    identityPhone: {
-      fontSize: 13,
-      fontWeight: '400',
-      color: 'rgba(255,255,255,0.6)',
-    },
+  // Sections
+  section: { marginBottom: spacing.xxl },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.xs,
+  },
+  sectionIconChip: {
+    width: 30,
+    height: 30,
+    borderRadius: radii.sm,
+    backgroundColor: colors.primaryTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+  sectionTitle: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.2 },
 
-    // Sections
-    section: {
-      marginBottom: 28,
-    },
-    sectionHeaderRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 12,
-      paddingHorizontal: 4,
-    },
-    sectionTitle: {
-      fontSize: 15,
-      fontWeight: '700',
-      color: colors.text,
-      letterSpacing: -0.2,
-    },
+  cardInner: { paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
 
-    card: {
-      backgroundColor: colors.card,
-      borderRadius: 20,
-      paddingHorizontal: 18,
-      paddingVertical: 6,
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.04,
-      shadowRadius: 16,
-      elevation: 1,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
+  rowIconChip: {
+    width: 34,
+    height: 34,
+    borderRadius: radii.sm,
+    backgroundColor: colors.primaryTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
 
-    // Input fields
-    fieldWrapper: {
-      paddingVertical: 14,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
-    fieldWrapperLast: {
-      borderBottomWidth: 0,
-    },
-    fieldLabel: {
-      fontSize: 11,
-      fontWeight: '700',
-      color: RASOI_BRAND.accentGold,
-      marginBottom: 8,
-      textTransform: 'uppercase',
-      letterSpacing: 0.4,
-    },
-    inputRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: colors.background,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: Platform.OS === 'ios' ? 12 : 8,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    inputRowError: {
-      borderColor: '#FCA5A5',
-      backgroundColor: '#FEF2F2',
-    },
-    textInput: {
-      flex: 1,
-      fontSize: 14,
-      fontWeight: '600',
-      color: colors.text,
-      padding: 0,
-    },
-    errorText: {
-      fontSize: 12,
-      fontWeight: '500',
-      color: '#DC2626',
-      marginTop: 6,
-    },
+  // Inputs
+  fieldWrapper: {
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.divider,
+  },
+  fieldWrapperLast: { borderBottomWidth: 0 },
+  fieldLabel: {
+    ...typography.eyebrow,
+    color: colors.primary,
+    marginBottom: spacing.sm,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: Platform.OS === 'ios' ? spacing.md : spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  inputRowError: { borderColor: colors.danger, backgroundColor: colors.dangerTint },
+  textInput: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.textPrimary, padding: 0 },
+  errorText: { fontSize: 12, fontWeight: '600', color: colors.danger, marginTop: 6 },
 
-    divider: {
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.border,
-    },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.divider },
 
-    // Devices
-    deviceRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingVertical: 18,
-    },
-    deviceLabel: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: colors.text,
-      marginBottom: 3,
-    },
-    deviceSubLabel: {
-      fontSize: 12,
-      fontWeight: '400',
-      color: colors.subText,
-    },
-    deviceCount: {
-      fontSize: 22,
-      fontWeight: '800',
-      color: RASOI_BRAND.primary,
-      letterSpacing: -0.4,
-    },
+  // Switch rows
+  switchRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.lg },
+  switchTextWrapper: { flex: 1, marginRight: spacing.md },
+  itemLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 3 },
+  itemSubLabel: { fontSize: 12, fontWeight: '500', color: colors.textSecondary },
 
-    // Switch rows
-    switchRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingVertical: 16,
-    },
-    switchTextWrapper: {
-      flex: 1,
-      marginRight: 12,
-    },
+  // Devices
+  deviceRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.lg },
+  countPill: {
+    minWidth: 34,
+    height: 34,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primaryTint,
+    borderWidth: 1,
+    borderColor: colors.primaryTintBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countPillText: { fontSize: 15, fontWeight: '800', color: colors.primary },
 
-    // Buttons
-    buttonGroup: {
-      marginTop: 8,
-      gap: 12,
-    },
-    actionButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 16,
-      borderRadius: 16,
-    },
-    primaryButton: {
-      backgroundColor: RASOI_BRAND.primary,
-      shadowColor: RASOI_BRAND.primary,
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.25,
-      shadowRadius: 16,
-      elevation: 3,
-    },
-    primaryButtonText: {
-      color: '#FFFFFF',
-      fontWeight: '700',
-      fontSize: 15,
-    },
-    secondaryButton: {
-      backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    secondaryButtonText: {
-      color: colors.text,
-      fontWeight: '700',
-      fontSize: 15,
-    },
+  // Buttons
+  buttonGroup: { marginTop: spacing.sm },
 
-    version: {
-      textAlign: 'center',
-      color: colors.subText,
-      fontSize: 12,
-      fontWeight: '500',
-      letterSpacing: 0.2,
-      marginTop: 24,
-    },
-  });
+  version: {
+    textAlign: 'center',
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 0.2,
+    marginTop: spacing.xxl,
+  },
+});

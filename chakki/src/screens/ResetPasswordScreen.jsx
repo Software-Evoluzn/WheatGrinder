@@ -11,10 +11,12 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
+import Feather from 'react-native-vector-icons/Feather';
 
 import IP_CONFIG from '../services/ip.json';
+import { PrimaryButton } from './ui';
+import { colors, spacing, radii, typography, shadows } from './theme';
 
 // ⚠️ Update with your local IP or backend URL
 // Android Emulator: 'http://10.0.2.2:5007'
@@ -81,7 +83,7 @@ const ResetPasswordScreen = ({ route, navigation }) => {
             onPress: () => {
               if (navigation?.navigate) {
                 // Navigates back to your Login screen
-                navigation.navigate('Login'); 
+                navigation.navigate('Login');
               }
             },
           },
@@ -106,7 +108,7 @@ const ResetPasswordScreen = ({ route, navigation }) => {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
 
         <View style={styles.mainContainer}>
           {/* TOP SECTION WITH LOGO */}
@@ -134,16 +136,14 @@ const ResetPasswordScreen = ({ route, navigation }) => {
           {/* FLOATING RESET PASSWORD CARD */}
           <View style={styles.cardContainer}>
             <Text style={styles.cardTitle}>Reset Password</Text>
-            <Text style={styles.cardSubtitle}>
-              Create a new password for your account
-            </Text>
+            <Text style={styles.cardSubtitle}>Create a new password for your account</Text>
 
             {/* NEW PASSWORD INPUT */}
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.passwordInput}
                 placeholder="New Password"
-                placeholderTextColor="#A0AEC0"
+                placeholderTextColor={colors.textMuted}
                 value={newPassword}
                 onChangeText={setNewPassword}
                 secureTextEntry={!showNewPassword}
@@ -153,8 +153,9 @@ const ResetPasswordScreen = ({ route, navigation }) => {
               <TouchableOpacity
                 style={styles.eyeButton}
                 onPress={() => setShowNewPassword(!showNewPassword)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Text style={styles.eyeText}>{showNewPassword ? 'Hide' : 'Show'}</Text>
+                <Feather name={showNewPassword ? 'eye-off' : 'eye'} size={18} color={colors.primary} />
               </TouchableOpacity>
             </View>
 
@@ -163,7 +164,7 @@ const ResetPasswordScreen = ({ route, navigation }) => {
               <TextInput
                 style={styles.passwordInput}
                 placeholder="Confirm New Password"
-                placeholderTextColor="#A0AEC0"
+                placeholderTextColor={colors.textMuted}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry={!showConfirmPassword}
@@ -173,24 +174,20 @@ const ResetPasswordScreen = ({ route, navigation }) => {
               <TouchableOpacity
                 style={styles.eyeButton}
                 onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Text style={styles.eyeText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
+                <Feather name={showConfirmPassword ? 'eye-off' : 'eye'} size={18} color={colors.primary} />
               </TouchableOpacity>
             </View>
 
             {/* SUBMIT BUTTON */}
-            <TouchableOpacity
-              style={[styles.submitButton, loading && styles.disabledButton]}
+            <PrimaryButton
+              title="Update Password"
               onPress={handleResetPassword}
-              activeOpacity={0.85}
+              loading={loading}
               disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.submitButtonText}>Update Password</Text>
-              )}
-            </TouchableOpacity>
+              style={{ marginTop: spacing.xs }}
+            />
           </View>
         </View>
       </SafeAreaView>
@@ -203,7 +200,7 @@ export default ResetPasswordScreen;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   mainContainer: {
     flex: 1,
@@ -213,7 +210,7 @@ const styles = StyleSheet.create({
   /* TOP HALF (WHITE BACKGROUND) */
   topSection: {
     height: '42%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     paddingBottom: 40,
@@ -229,26 +226,26 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 
-  /* BOTTOM HALF (PURPLE BACKGROUND) */
+  /* BOTTOM HALF (BRAND PURPLE BACKGROUND) */
   bottomSection: {
     height: '58%',
-    backgroundColor: '#492971',
+    backgroundColor: colors.primary,
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 140,
-    paddingBottom: 24,
+    paddingBottom: spacing.xxl,
   },
   backToLoginText: {
-    color: '#E0D6EC',
+    color: 'rgba(255,255,255,0.8)',
     fontSize: 14,
     fontWeight: '500',
   },
   loginBoldText: {
-    color: '#FFFFFF',
+    color: colors.textOnPrimary,
     fontWeight: '700',
   },
   footerBrandText: {
-    color: '#D8CEE6',
+    color: 'rgba(255,255,255,0.7)',
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.5,
@@ -260,75 +257,52 @@ const styles = StyleSheet.create({
     top: '26%',
     left: '8%',
     right: '8%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingVertical: 26,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 10,
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    paddingVertical: spacing.xxl,
+    paddingHorizontal: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
   cardTitle: {
     fontSize: 22,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 6,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+    letterSpacing: 0.2,
   },
   cardSubtitle: {
+    ...typography.body,
     fontSize: 13,
-    color: '#7C7C7C',
+    color: colors.textSecondary,
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.xl,
     lineHeight: 18,
   },
 
   /* INPUT CONTAINERS */
   inputContainer: {
     width: '100%',
-    height: 50,
-    backgroundColor: '#F1F3F6',
-    borderRadius: 10,
+    height: 52,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 14,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
   },
   passwordInput: {
     flex: 1,
     height: '100%',
     fontSize: 15,
     fontWeight: '500',
-    color: '#1A1A1A',
+    color: colors.textPrimary,
   },
   eyeButton: {
-    paddingLeft: 10,
-  },
-  eyeText: {
-    color: '#492971',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-
-  /* SUBMIT BUTTON */
-  submitButton: {
-    width: '100%',
-    height: 50,
-    backgroundColor: '#492971',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  disabledButton: {
-    opacity: 0.7,
-  },
-  submitButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    paddingLeft: spacing.md,
   },
 });

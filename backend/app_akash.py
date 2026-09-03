@@ -25,12 +25,15 @@ GMAIL_PASSWORD = "euhf nozx wsjy pwbr"
 # -------------------------------
 # DATABASE CONNECTION
 # -------------------------------
-db = mysql.connector.connect(
+DB_CONFIG = mysql.connector.connect(
     host="localhost",
     user="root",
     password="root",
     database="wheat_grinder"
 )
+
+#Inttial Connection
+db = mysql.connector.connect(**DB_CONFIG)
 cursor = db.cursor(dictionary=True)
 
 
@@ -42,12 +45,7 @@ def get_cursor():
     try:
         db.ping(reconnect=True, attempts=3, delay=2)
     except Exception:
-        db = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="root",
-            database="wheat1"
-        )
+        db = mysql.connector.connect(**DB_CONFIG)
     cursor = db.cursor(dictionary=True)
     return cursor
 

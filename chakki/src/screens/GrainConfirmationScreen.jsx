@@ -1,286 +1,161 @@
 import React, { useState } from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
-  Platform,
-  Image,
-} from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
+import { Screen, MainHeader, SelectableCard, FootNote } from './ui';
+import { colors, spacing, radii, shadows, typography } from './theme';
 
 const GrainConfirmationScreen = ({ navigation, route }) => {
-  // Navigation params se grain name and texture retrieve karein (Fallback defaults in case route params null hon)
+  // --- functionality preserved exactly ---
   const selectedGrain = route?.params?.grainName || 'WHEAT';
   const selectedTexture = route?.params?.texture || 'MEDIUM';
 
   const [selectedOption, setSelectedOption] = useState(null);
 
   const handleBack = () => {
-    if (navigation?.goBack) {
-      navigation.goBack();
-    }
+    if (navigation?.goBack) navigation.goBack();
   };
 
   const handleStartProcess = () => {
     setSelectedOption('start');
-    // Direct processing screen par jaane ke liye:
     navigation.navigate('MillingControlScreen', { grain: selectedGrain, texture: selectedTexture });
   };
 
   const handleSetTexture = () => {
     setSelectedOption('texture');
-    // Flow Rate / Texture setting screen par jaane ke liye:
     navigation.navigate('UserChoiceScreen', { grain: selectedGrain });
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      
-      <View style={styles.container}>
-        
-        {/* TOP HEADER */}
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={handleBack}
-            activeOpacity={0.8}
-          >
-            <Feather name="arrow-left" size={22} color="#FFFFFF" />
-          </TouchableOpacity>
+    <Screen background={colors.background}>
+      {/* Header: same MainHeader structure/spacing as the rest of the flow.
+          The dynamic grain name takes the title slot (short, like "Cleaning"
+          or "Collection Cloth"); texture moves into a pill in the body below
+          since it's a second piece of dynamic data, not a static eyebrow. */}
+      <MainHeader
+        greeting="My Kitchen Tools"
+        title={selectedGrain.toUpperCase()}
+        onBack={handleBack}
+      />
 
-          <View style={styles.titleContainer}>
-            <Text style={styles.headerTitle}>YOU HAVE CHOSEN : {selectedGrain.toUpperCase()}</Text>
-            <Text style={styles.headerSubtitle}>
-              TEXTURE : <Text style={styles.textureValue}>{selectedTexture.toUpperCase()}</Text>
-            </Text>
-          </View>
-
-          {/* Logo Placeholder */}
-          {/* <View style={styles.logoContainer}>
-            <Image
-              source={require('./assets/logo.png')} // Apne project ka logo path set karein
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View> */}
-        </View>
-
-        {/* MAIN BODY */}
-        <View style={styles.mainSection}>
-          <Text style={styles.questionText}>Do you want to :</Text>
-
-          {/* ACTION CARDS */}
-          <View style={styles.cardsRow}>
-            
-            {/* Card 1: START */}
-            <TouchableOpacity
-              style={[
-                styles.actionCard,
-                selectedOption === 'start' && styles.selectedCard,
-              ]}
-              onPress={handleStartProcess}
-              activeOpacity={0.85}
-            >
-              <View style={[styles.iconContainer, selectedOption === 'start' && styles.selectedIconBg]}>
-                <Feather
-                  name="play-circle"
-                  size={46}
-                  color={selectedOption === 'start' ? '#FFFFFF' : '#5B8DEF'}
-                />
-              </View>
-              <Text style={[styles.cardText, selectedOption === 'start' && styles.selectedCardText]}>
-                START
-              </Text>
-            </TouchableOpacity>
-
-            {/* Card 2: TEXTURE */}
-            <TouchableOpacity
-              style={[
-                styles.actionCard,
-                selectedOption === 'texture' && styles.selectedCard,
-              ]}
-              onPress={handleSetTexture}
-              activeOpacity={0.85}
-            >
-              <View style={[styles.iconContainer, selectedOption === 'texture' && styles.selectedIconBg]}>
-                <Feather
-                  name="settings"
-                  size={42}
-                  color={selectedOption === 'texture' ? '#FFFFFF' : '#5B8DEF'}
-                />
-              </View>
-              <Text style={[styles.cardText, selectedOption === 'texture' && styles.selectedCardText]}>
-                TEXTURE
-              </Text>
-            </TouchableOpacity>
-
+      <View style={styles.body}>
+        {/* Compact icon badge — no illustration asset exists for this step,
+            so a smaller ring/glow accent keeps the same visual language
+            without crowding the two selection cards below. */}
+        <View style={styles.badgeOuter}>
+          <View style={styles.badgeInner}>
+            <Feather name="check-circle" size={40} color={colors.primary} />
           </View>
         </View>
 
-        {/* FOOTER HINT */}
-        <View style={styles.footerHintContainer}>
-          <Text style={styles.footerText}>
-            Select{' '}
-            <View style={styles.inlineBackBadge}>
-              <Feather name="arrow-left" size={12} color="#FFFFFF" />
-            </View>
-            {' '}to choose a different Grain
-          </Text>
+        <View style={styles.texturePill}>
+          <View style={styles.dot} />
+          <Text style={styles.textureText}>Texture · {selectedTexture.toUpperCase()}</Text>
         </View>
 
+        <Text style={styles.question}>What would you like to do?</Text>
+
+        <View style={styles.cardsRow}>
+          <SelectableCard
+            selected={selectedOption === 'start'}
+            onPress={handleStartProcess}
+            icon="play"
+            label="START"
+          />
+          <SelectableCard
+            selected={selectedOption === 'texture'}
+            onPress={handleSetTexture}
+            icon="sliders"
+            label="TEXTURE"
+          />
+        </View>
       </View>
-    </SafeAreaView>
+
+      <View style={styles.footer}>
+        <FootNote>Use the back button to choose a different grain</FootNote>
+      </View>
+    </Screen>
   );
 };
 
 export default GrainConfirmationScreen;
 
+const BADGE = 140;
+const badgeCenter = (size) => (BADGE - size) / 2;
+
 const styles = StyleSheet.create({
-  safeArea: {
+  body: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 24,
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xxl,
   },
 
-  /* HEADER */
-  headerRow: {
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 12,
+  badgeOuter: {
+    width: BADGE,
+    height: BADGE,
+    borderRadius: BADGE / 2,
+    backgroundColor: colors.primaryTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeInner: {
+    width: BADGE - 24,
+    height: BADGE - 24,
+    borderRadius: (BADGE - 24) / 2,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.card,
+  },
+
+  texturePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    alignSelf: 'center',
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primaryTint,
+    borderWidth: 1,
+    borderColor: colors.primaryTintBorder,
   },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#5B8DEF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 3,
-    shadowColor: '#5B8DEF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+    marginRight: spacing.sm,
   },
-  titleContainer: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 18,
+  textureText: {
+    fontSize: 13,
     fontWeight: '800',
-    color: '#2C2C2E',
-    letterSpacing: 1.2,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#6B7280',
-    marginTop: 4,
-    letterSpacing: 1,
-  },
-  textureValue: {
-    color: '#5B8DEF',
-    fontWeight: '800',
-  },
-  logoContainer: {
-    width: 50,
-    height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoImage: {
-    width: 50,
-    height: 50,
-  },
-
-  /* MAIN SECTION */
-  mainSection: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  questionText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#4B5563',
-    marginBottom: 20,
-    textAlign: 'left',
-  },
-
-  /* CARDS SECTION */
-  cardsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 20,
-  },
-  actionCard: {
-    flex: 1,
-    height: 160,
-    backgroundColor: '#FAFAFD',
-    borderWidth: 1.5,
-    borderColor: '#D1D5DB',
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 2,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-  },
-  selectedCard: {
-    borderColor: '#5B8DEF',
-    borderWidth: 2,
-    backgroundColor: '#F0F5FF',
-  },
-  iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#EEF2FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  selectedIconBg: {
-    backgroundColor: '#5B8DEF',
-  },
-  cardText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#374151',
-    letterSpacing: 1.2,
-  },
-  selectedCardText: {
-    color: '#5B8DEF',
-  },
-
-  /* FOOTER HINT */
-  footerHintContainer: {
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  footerText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
+    color: colors.primary,
     letterSpacing: 0.5,
   },
-  inlineBackBadge: {
-    backgroundColor: '#5B8DEF',
-    width: 20,
-    height: 20,
-    borderRadius: 5,
+
+  question: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginTop: spacing.xxxl,
+    letterSpacing: 0.2,
+  },
+
+  cardsRow: {
+    flexDirection: 'row',
+    gap: spacing.lg,
+    marginTop: spacing.xl,
+    alignSelf: 'stretch',
     justifyContent: 'center',
+  },
+
+  footer: {
     alignItems: 'center',
+    paddingBottom: spacing.xxl,
+    paddingHorizontal: spacing.xxl,
   },
 });

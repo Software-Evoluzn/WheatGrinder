@@ -1,24 +1,149 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  View,
-  Image,
-  Text,
-  StyleSheet,
-  StatusBar,
-  Animated,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, Animated, Easing, Modal, Pressable } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  Screen,
+  MainHeader,
+  IconButton,
+  Eyebrow,
+  ProgressBar,
+  StatusBadge,
+  AppDialog,
+} from './ui';
+import { colors, spacing, typography, radii, shadows, layout } from './theme';
 
-
-const PROGRESS_STEP = 10; // % added per tick
+const PROGRESS_STEP = 10;        // % added per tick
 const PROGRESS_INTERVAL_MS = 450; // how often progress advances
-const DONE_HOLD_MS = 2500; // how long the "DONE" message shows before advancing
-const NEXT_ROUTE = 'CleanStoneChoiceScreen'; // change to wherever "cleaning finished" should return to
+const DONE_HOLD_MS = 2500;        // how long the "DONE" message shows before advancing
+const NEXT_ROUTE = 'CleanStoneChoiceScreen';
 
-const RULER_TICKS = 41; // small decorative scale under the bar (purely visual)
+/* -------------------------------------------------------------------------- */
+/*  HeaderMenu — static overflow (kebab) menu. No API / no dynamic data.       */
+/*    Purely informational — this screen has no back button, since the        */
+/*    cleaning process auto-advances and shouldn't be interrupted mid-cycle.  */
+/* -------------------------------------------------------------------------- */
+const HeaderMenu = () => {
+  const [open, setOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const insets = useSafeAreaInsets();
+
+  const items = [
+    { icon: 'help-circle', label: 'Help', onPress: () => setHelpOpen(true) },
+  ];
+
+  return (
+    <>
+      <IconButton
+        name="more-vertical"
+        variant="ghost"
+        onPress={() => setOpen(true)}
+        accessibilityLabel="More options"
+      />
+
+      <Modal
+        transparent
+        visible={open}
+        animationType="fade"
+        onRequestClose={() => setOpen(false)}
+      >
+        <Pressable style={styles.menuOverlay} onPress={() => setOpen(false)}>
+          <View style={[styles.menuCard, { top: insets.top + layout.headerContentHeight + spacing.sm }]}>
+            {items.map((item, i) => (
+              <Pressable
+                key={item.label}
+                onPress={() => {
+                  setOpen(false);
+                  item.onPress();
+                }}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.menuItem,
+                  i > 0 && styles.menuItemBorder,
+                  pressed && { backgroundColor: colors.primaryTint },
+                ]}
+              >
+                <Feather name={item.icon} size={18} color={colors.primary} style={{ marginRight: spacing.md }} />
+                <Text style={styles.menuItemText}>{item.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
+      <AppDialog
+        visible={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        icon="help-circle"
+        title="Help"
+        message="The machine is cleaning itself. This finishes automatically — no action is needed until it's done."
+        confirmLabel="Got it"
+        onConfirm={() => setHelpOpen(false)}
+      />
+    </>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/*  ProcessHero — layered visualization, matching CleaningHero's composition  */
+/* -------------------------------------------------------------------------- */
+const HERO = 260;
+const center = (size) => (HERO - size) / 2;
+
+const ProcessHero = () => {
+  const pulse = useRef(new Animated.Value(0)).current;
+  const spin = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    );
+    const spinLoop = Animated.loop(
+      Animated.timing(spin, { toValue: 1, duration: 1400, easing: Easing.linear, useNativeDriver: true })
+    );
+    pulseLoop.start();
+    spinLoop.start();
+    return () => {
+      pulseLoop.stop();
+      spinLoop.stop();
+    };
+  }, [pulse, spin]);
+
+  const glowScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.08] });
+  const glowOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.55] });
+  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+
+  return (
+    <View style={styles.hero}>
+      <Animated.View style={[styles.glow, { transform: [{ scale: glowScale }], opacity: glowOpacity }]} />
+      <View style={styles.ringStatic} />
+      <Animated.View style={[styles.ringArc, { transform: [{ rotate }] }]} />
+      <View style={styles.disc}>
+        <Feather name="loader" size={48} color={colors.primary} />
+      </View>
+    </View>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/*  DoneHero — same ring/glow language, in the success color                  */
+/* -------------------------------------------------------------------------- */
+const DoneHero = ({ checkScale }) => (
+  <View style={styles.hero}>
+    <View style={[styles.glow, { backgroundColor: colors.successTint || colors.primaryTint, opacity: 0.5 }]} />
+    <View style={[styles.ringStatic, { borderColor: colors.successSubtle || colors.primarySubtle }]} />
+    <View style={[styles.ringArc, { borderColor: colors.successTintBorder || colors.primaryTintBorder }]} />
+    <Animated.View style={[styles.checkCircle, { transform: [{ scale: checkScale }] }]}>
+      <Feather name="check" size={32} color={colors.textOnPrimary} />
+    </Animated.View>
+  </View>
+);
 
 const CleaningProcessScreen = ({ navigation }) => {
+  // --- functionality preserved exactly ---
   const [progress, setProgress] = useState(0);
   const [phase, setPhase] = useState('progress'); // 'progress' | 'done'
   const checkScale = useRef(new Animated.Value(0)).current;
@@ -26,17 +151,13 @@ const CleaningProcessScreen = ({ navigation }) => {
   // Advance the progress bar until it hits 100
   useEffect(() => {
     if (phase !== 'progress') return undefined;
-
     const interval = setInterval(() => {
       setProgress((prev) => {
         const next = Math.min(prev + PROGRESS_STEP, 100);
-        if (next >= 100) {
-          clearInterval(interval);
-        }
+        if (next >= 100) clearInterval(interval);
         return next;
       });
     }, PROGRESS_INTERVAL_MS);
-
     return () => clearInterval(interval);
   }, [phase]);
 
@@ -52,254 +173,174 @@ const CleaningProcessScreen = ({ navigation }) => {
   // Pop in the checkmark, then auto-advance after a hold period
   useEffect(() => {
     if (phase !== 'done') return undefined;
-
-    Animated.spring(checkScale, {
-      toValue: 1,
-      friction: 5,
-      tension: 80,
-      useNativeDriver: true,
-    }).start();
-
+    Animated.spring(checkScale, { toValue: 1, friction: 5, tension: 80, useNativeDriver: true }).start();
     const advance = setTimeout(() => {
-      if (navigation?.replace) {
-        navigation.replace(NEXT_ROUTE);
-      } else if (navigation?.navigate) {
-        navigation.navigate(NEXT_ROUTE);
-      }
+      if (navigation?.replace) navigation.replace(NEXT_ROUTE);
+      else if (navigation?.navigate) navigation.navigate(NEXT_ROUTE);
     }, DONE_HOLD_MS);
-
     return () => clearTimeout(advance);
   }, [phase, checkScale, navigation]);
 
   if (phase === 'done') {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
-        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <Screen background={colors.background} edges={['top', 'left', 'right', 'bottom']}>
+        {/* No back button: the cycle has just finished and is auto-advancing. */}
+        <MainHeader greeting="Machine Status" title="Cleaning Process" onBack={undefined} right={<HeaderMenu />} />
+
         <View style={styles.centerContent}>
-      
-
-          <Animated.View
-            style={[styles.checkCircle, { transform: [{ scale: checkScale }] }]}
-          >
-            <Feather name="check" size={30} color="#FFFFFF" />
-          </Animated.View>
-
-          <Text style={styles.doneTitle}>Self Cleaning is DONE.</Text>
-          <Text style={styles.doneSubtitle}>
-            Please discard contents from collection bowl.
-          </Text>
+          <DoneHero checkScale={checkScale} />
+          <Text style={styles.title}>Self cleaning is done</Text>
+          <Text style={styles.message}>Please discard the contents from the collection bowl.</Text>
         </View>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <Screen background={colors.background} edges={['top', 'left', 'right', 'bottom']}>
+      {/* No back button: interrupting an in-progress cleaning cycle isn't allowed. */}
+      <MainHeader greeting="Machine Status" title="Cleaning Process" onBack={undefined} right={<HeaderMenu />} />
 
-      <View style={styles.body}>
-        {/* Logo centered above the title, same as every other new screen */}
-        {/* <Image
-          source={require('../assets/images/Softel Millet mill logo 2.png')}
-          style={styles.millLogo}
-          resizeMode="contain"
-        /> */}
-        <Text style={styles.headerTitle}>CLEANING PROCESS</Text>
-        <Text style={styles.percentLabel}>{progress} % COMPLETED</Text>
+      <View style={styles.content}>
+        <ProcessHero />
 
-        {/* Progress bar */}
-        <View style={styles.trackOuter}>
-          <View style={[styles.trackFill, { width: `${progress}%` }]} />
-          <Text
-            style={[
-              styles.trackPercentText,
-              { left: progress === 0 ? 14 : undefined },
-            ]}
-          >
-            {progress}%
-          </Text>
-        </View>
+        <Eyebrow style={{ marginTop: spacing.xxxl }}>Self-cleaning</Eyebrow>
+        <Text style={styles.title}>Cleaning process</Text>
+        <Text style={styles.percent}>{progress}% completed</Text>
 
-        {/* Decorative ruler scale */}
-        <View style={styles.rulerTicks}>
-          {Array.from({ length: RULER_TICKS }).map((_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.tick,
-                i % 10 === 0 ? styles.tickMajor : styles.tickMinor,
-              ]}
-            />
-          ))}
-        </View>
-        <View style={styles.rulerLabels}>
-          <Text style={styles.rulerLabelText}>0</Text>
-          <Text style={styles.rulerLabelText}>50</Text>
-          <Text style={styles.rulerLabelText}>100</Text>
-        </View>
+        <ProgressBar value={progress} height={46} style={{ marginTop: spacing.xl, alignSelf: 'stretch' }} />
 
-        {/* Status pill — informational only, not tappable, while the cycle runs */}
-        <View style={styles.waitPill}>
-          <Text style={styles.waitPillText}>PLEASE WAIT</Text>
-        </View>
+        <StatusBadge label="Please wait" variant="info" icon="loader" style={{ marginTop: spacing.huge, alignSelf: 'center' }} />
       </View>
-    </SafeAreaView>
+    </Screen>
   );
 };
 
 export default CleaningProcessScreen;
 
 const styles = StyleSheet.create({
-  safe: {
+  // Overflow menu
+  menuOverlay: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'transparent',
   },
-
-  /* ---- Progress phase ---- */
-
-  body: {
-    flex: 1,
-    paddingHorizontal: 28,
+  menuCard: {
+    position: 'absolute',
+    right: layout.screenPaddingHorizontal,
+    minWidth: 180,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing.xs,
+    ...shadows.card,
+  },
+  menuItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center', // vertically centers the whole block, same as your other screens
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
   },
-
-  millLogo: {
-    width: 170,
-    height: 90,
-    marginBottom: 22,
+  menuItemBorder: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
   },
-
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#3E1A5B',
-    letterSpacing: 0.4,
-    textAlign: 'center',
-    marginBottom: 18,
-  },
-
-  percentLabel: {
+  menuItemText: {
     fontSize: 15,
-    fontWeight: '800',
-    color: '#55327A',
-    letterSpacing: 0.6,
-    marginBottom: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
   },
 
-  trackOuter: {
-    width: '100%',
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#E9E6ED',
+  content: {
+    flex: 1,
+    paddingHorizontal: spacing.xxl,
+    alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
   },
-
-  trackFill: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: '#55327A',
-    borderRadius: 23,
-  },
-
-  trackPercentText: {
-    position: 'absolute',
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    paddingLeft: 14,
-  },
-
-  rulerTicks: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    width: '100%',
-    marginTop: 18,
-    paddingHorizontal: 2,
-  },
-
-  tick: {
-    width: 1.5,
-    backgroundColor: '#B9B9C2',
-  },
-
-  tickMajor: {
-    height: 12,
-  },
-
-  tickMinor: {
-    height: 6,
-  },
-
-  rulerLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginTop: 6,
-  },
-
-  rulerLabelText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1A1A1A',
-  },
-
-  waitPill: {
-    marginTop: 40,
-    backgroundColor: 'rgba(85, 50, 122, 0.55)',
-    paddingVertical: 14,
-    paddingHorizontal: 48,
-    borderRadius: 12,
-  },
-
-  waitPillText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-
-  /* ---- Done phase ---- */
-
   centerContent: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: spacing.xxxl,
   },
 
-  millLogoCentered: {
-    width: 170,
-    height: 90,
-    marginBottom: 30,
-  },
-
-  checkCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#16A34A',
+  // Hero visualization (shared shape language with SelfCleaningScreen)
+  hero: {
+    width: HERO,
+    height: HERO,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 22,
+  },
+  glow: {
+    position: 'absolute',
+    width: 210,
+    height: 210,
+    top: center(210),
+    left: center(210),
+    borderRadius: 105,
+    backgroundColor: colors.primaryTint,
+  },
+  ringStatic: {
+    position: 'absolute',
+    width: 198,
+    height: 198,
+    top: center(198),
+    left: center(198),
+    borderRadius: 99,
+    borderWidth: 1,
+    borderColor: colors.primarySubtle,
+  },
+  ringArc: {
+    position: 'absolute',
+    width: 198,
+    height: 198,
+    top: center(198),
+    left: center(198),
+    borderRadius: 99,
+    borderWidth: 6,
+    borderColor: colors.primaryTintBorder,
+    borderTopColor: colors.primary,
+  },
+  disc: {
+    width: 132,
+    height: 132,
+    borderRadius: 66,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.card,
+  },
+  checkCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.success,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
-  doneTitle: {
-    fontSize: 18,
+  title: {
+    fontSize: 22,
     fontWeight: '800',
-    color: '#3E1A5B',
+    color: colors.textPrimary,
     textAlign: 'center',
-    marginBottom: 8,
+    marginTop: spacing.sm,
+    letterSpacing: 0.2,
   },
-
-  doneSubtitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#6B5B7A',
+  percent: {
+    ...typography.subtitle,
+    color: colors.primary,
+    fontWeight: '800',
+    marginTop: spacing.md,
+  },
+  message: {
+    ...typography.subtitle,
+    color: colors.textSecondary,
     textAlign: 'center',
+    marginTop: spacing.md,
+    lineHeight: 22,
+    maxWidth: 320,
   },
 });

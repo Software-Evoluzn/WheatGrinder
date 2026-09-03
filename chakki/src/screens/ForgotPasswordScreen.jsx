@@ -14,58 +14,51 @@ import {
 } from 'react-native';
 
 import IP_CONFIG from '../services/ip.json';
+import { PrimaryButton } from './ui';
+import { colors, spacing, radii, typography, shadows } from './theme';
 
 const API_BASE_URL = IP_CONFIG.BASE_URL;
 
 const ForgotPasswordScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
-  const [loading , setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleSendResetLink = async () => {
     console.log('Reset link requested for:', email);
 
-    if(!email.trim()){
-        Alert.alert('Error','Please enter your registered email address');
-        return;
+    if (!email.trim()) {
+      Alert.alert('Error', 'Please enter your registered email address');
+      return;
     }
     setLoading(true);
 
-    try{
+    try {
+      const response = await fetch(`${API_BASE_URL}/forgot-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: email.trim() }),
+      });
 
-        const response =  await fetch(`${API_BASE_URL}/forgot-password`,{
-            method:'POST',
-            headers:{
-                'Content-Type':'application/json',
+      const data = await response.json();
 
-            },
-            body: JSON.stringify({email:email.trim()}),
+      if (response.ok) {
+        Alert.alert('Success', data.message || 'OTP sent to your email');
 
-        });
-
-        const data = await response.json();
-
-        if(response.ok){
-            Alert.alert('Success',data.message || 'OTP sent to your email');
-            
-            if(navigation?.navigate){
-                navigation.navigate('VerifyOtpScreen',{email:email.trim()});
-            }
-
-
-        }else{
-            Alert.alert('Error', data.error || 'Failed to send OTP.');
+        if (navigation?.navigate) {
+          navigation.navigate('VerifyOtpScreen', { email: email.trim() });
         }
-
-    }catch(error){
-
-        console.error('API Error:', error);
-        Alert.alert('Error', 'Unable to connect to server. Please try again.');
-
-    }finally{
-        setLoading(false);
+      } else {
+        Alert.alert('Error', data.error || 'Failed to send OTP.');
+      }
+    } catch (error) {
+      console.error('API Error:', error);
+      Alert.alert('Error', 'Unable to connect to server. Please try again.');
+    } finally {
+      setLoading(false);
     }
-
-};
+  };
 
   const handleBackToLogin = () => {
     if (navigation?.goBack) {
@@ -78,13 +71,12 @@ const ForgotPasswordScreen = ({ navigation }) => {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
 
         <View style={styles.mainContainer}>
           {/* TOP SECTION WITH LOGO */}
           <View style={styles.topSection}>
             <View style={styles.logoContainer}>
-              {/* Replace with your logo image asset */}
               <Image
                 source={require('../assets/images/capture.png')}
                 style={styles.logoImage}
@@ -116,7 +108,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
               <TextInput
                 style={styles.emailInput}
                 placeholder="Enter your email"
-                placeholderTextColor="#A0AEC0"
+                placeholderTextColor={colors.textMuted}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -126,14 +118,12 @@ const ForgotPasswordScreen = ({ navigation }) => {
             </View>
 
             {/* SUBMIT BUTTON */}
-            <TouchableOpacity
-              style={styles.submitButton}
+            <PrimaryButton
+              title="Send Reset Link"
               onPress={handleSendResetLink}
-              activeOpacity={0.85}
+              loading={loading}
               disabled={loading}
-            >
-              <Text style={styles.submitButtonText}>Send Reset Link</Text>
-            </TouchableOpacity>
+            />
           </View>
         </View>
       </SafeAreaView>
@@ -146,7 +136,7 @@ export default ForgotPasswordScreen;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   mainContainer: {
     flex: 1,
@@ -156,7 +146,7 @@ const styles = StyleSheet.create({
   /* TOP HALF (WHITE BACKGROUND) */
   topSection: {
     height: '42%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     paddingBottom: 40,
@@ -172,26 +162,26 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 
-  /* BOTTOM HALF (PURPLE BACKGROUND) */
+  /* BOTTOM HALF (BRAND PURPLE BACKGROUND) */
   bottomSection: {
     height: '58%',
-    backgroundColor: '#492971', // Deep purple matching UI mockup
+    backgroundColor: colors.primary,
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 130, // Space below floating card
-    paddingBottom: 24,
+    paddingBottom: spacing.xxl,
   },
   backToLoginText: {
-    color: '#E0D6EC',
+    color: 'rgba(255,255,255,0.8)',
     fontSize: 14,
     fontWeight: '500',
   },
   loginBoldText: {
-    color: '#FFFFFF',
+    color: colors.textOnPrimary,
     fontWeight: '700',
   },
   footerBrandText: {
-    color: '#D8CEE6',
+    color: 'rgba(255,255,255,0.7)',
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.5,
@@ -203,60 +193,46 @@ const styles = StyleSheet.create({
     top: '30%',
     left: '8%',
     right: '8%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingVertical: 28,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 10,
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    paddingVertical: spacing.xxl,
+    paddingHorizontal: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
   cardTitle: {
     fontSize: 22,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 8,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+    letterSpacing: 0.2,
   },
   cardSubtitle: {
+    ...typography.body,
     fontSize: 13,
-    color: '#7C7C7C',
+    color: colors.textSecondary,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
     lineHeight: 18,
   },
 
   /* EMAIL INPUT BOX */
   inputContainer: {
     width: '100%',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   emailInput: {
     width: '100%',
-    height: 50,
-    borderRadius: 10,
-    backgroundColor: '#F1F3F6',
-    paddingHorizontal: 16,
+    height: 52,
+    borderRadius: radii.md,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.lg,
     fontSize: 15,
     fontWeight: '500',
-    color: '#1A1A1A',
-  },
-
-  /* SUBMIT BUTTON */
-  submitButton: {
-    width: '100%',
-    height: 50,
-    backgroundColor: '#492971',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  submitButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    color: colors.textPrimary,
   },
 });

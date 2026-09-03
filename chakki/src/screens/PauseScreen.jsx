@@ -1,189 +1,266 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  StyleSheet,
-  Text,
   View,
-  SafeAreaView,
-  StatusBar,
-  Platform,
-  Image,
+  Text,
+  StyleSheet,
   Animated,
   Easing,
-  TouchableOpacity,
+  Modal,
+  Pressable,
 } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  Screen,
+  MainHeader,
+  IconButton,
+  PrimaryButton,
+  BottomActionBar,
+  AppDialog,
+} from './ui';
+import { colors, spacing, radii, typography, shadows, layout } from './theme';
+
+/* Static overflow (kebab) menu — no API / no dynamic data. */
+const HeaderMenu = () => {
+  const [open, setOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const insets = useSafeAreaInsets();
+
+  const items = [
+    { icon: 'help-circle', label: 'Help', onPress: () => setHelpOpen(true) },
+  ];
+
+  return (
+    <>
+      <IconButton name="more-vertical" variant="ghost" onPress={() => setOpen(true)} accessibilityLabel="More options" />
+
+      <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable style={styles.menuOverlay} onPress={() => setOpen(false)}>
+          <View style={[styles.menuCard, { top: insets.top + layout.headerContentHeight + spacing.sm }]}>
+            {items.map((item, i) => (
+              <Pressable
+                key={item.label}
+                onPress={() => {
+                  setOpen(false);
+                  item.onPress();
+                }}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.menuItem,
+                  i > 0 && styles.menuItemBorder,
+                  pressed && { backgroundColor: colors.primaryTint },
+                ]}
+              >
+                <Feather name={item.icon} size={18} color={colors.primary} style={{ marginRight: spacing.md }} />
+                <Text style={styles.menuItemText}>{item.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
+      <AppDialog
+        visible={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        icon="help-circle"
+        title="Help"
+        message="The grind cycle is on hold. Tap CANCEL if you want to change the process."
+        confirmLabel="Got it"
+        onConfirm={() => setHelpOpen(false)}
+      />
+    </>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/*  PauseHero — purple status visualization (gentle pulse, no spin = "hold")   */
+/* -------------------------------------------------------------------------- */
+const HERO = 260;
+const center = (size) => (HERO - size) / 2;
+
+const PauseHero = () => {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 1700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  const glowScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.06] });
+  const glowOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.5] });
+
+  return (
+    <View style={styles.hero}>
+      <Animated.View style={[styles.glow, { transform: [{ scale: glowScale }], opacity: glowOpacity }]} />
+      <View style={styles.ringStatic} />
+      <View style={styles.disc}>
+        <Feather name="pause" size={46} color={colors.primary} />
+      </View>
+    </View>
+  );
+};
+
+/* Status pill with a gentle pulsing dot. */
+const StatusPill = ({ label }) => {
+  const dot = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(dot, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(dot, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [dot]);
+  const opacity = dot.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] });
+  const scale = dot.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1.15] });
+  return (
+    <View style={styles.statusPill}>
+      <Animated.View style={[styles.dot, { opacity, transform: [{ scale }] }]} />
+      <Text style={styles.statusText}>{label}</Text>
+    </View>
+  );
+};
 
 const PauseScreen = ({ navigation }) => {
-  // Animation reference for the continuous rotation
-  const spinValue = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    // Infinite rotation animation loop
-    const startRotation = () => {
-      spinValue.setValue(0);
-      Animated.loop(
-        Animated.timing(spinValue, {
-          toValue: 1,
-          duration: 1500,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        })
-      ).start();
-    };
-
-    startRotation();
-  }, [spinValue]);
-
-  // Option 1: Automatic Navigation after pause sequence finishes (e.g., 3 seconds)
+  // Preserved: optional auto-advance stays commented; CANCEL -> HighTemperatureScreen.
   /*
   useEffect(() => {
     const timer = setTimeout(() => {
-      navigation.navigate('MillingControlScreen'); // Replace with your target screen
+      navigation.navigate('MillingControlScreen');
     }, 3000);
-
     return () => clearTimeout(timer);
   }, [navigation]);
   */
 
-  // Interpolate degrees for rotation
-  const spin = spinValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
-  // Action on pressing CANCEL
   const handleCancel = () => {
     if (navigation?.navigate) {
       navigation.navigate('HighTemperatureScreen');
     }
   };
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <Screen background={colors.background}>
+      {/* Header matches the flow screens: back + greeting/title + static menu. */}
+      <MainHeader
+        greeting="Machine Status"
+        title="Pause"
+        onBack={navigation?.goBack ? () => navigation.goBack() : undefined}
+        right={<HeaderMenu />}
+      />
 
-      <View style={styles.container}>
-        {/* TOP HEADER / LOGO SECTION */}
-        <View style={styles.headerRow}>
-          <View style={{ flex: 1 }} />
+      <View style={styles.content}>
+        <PauseHero />
 
-          {/* Logo Container */}
-          {/* <View style={styles.logoContainer}>
-            <Image
-              source={require('./assets/logo.png')} // Update path to your logo asset
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View> */}
-        </View>
+        <Text style={styles.title}>Pause in progress</Text>
+        <Text style={styles.message}>
+          Holding the current grind cycle. You can cancel to change the process.
+        </Text>
 
-        {/* MAIN CENTER CONTENT */}
-        <View style={styles.centerSection}>
-          {/* ANIMATED LOADER ICON */}
-          <Animated.View
-            style={[
-              styles.loaderContainer,
-              { transform: [{ rotate: spin }] },
-            ]}
-          >
-            <Feather name="loader" size={72} color="#5B8DEF" />
-          </Animated.View>
-
-          {/* STATUS TITLE */}
-          <Text style={styles.pauseText}>PAUSE in Progress</Text>
-
-          {/* CANCEL BUTTON */}
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={handleCancel}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.cancelButtonText}>CANCEL</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* BOTTOM BALANCING SPACER */}
-        <View style={styles.footerSpacer} />
+        <StatusPill label="Paused" />
       </View>
-    </SafeAreaView>
+
+      <BottomActionBar>
+        <PrimaryButton title="CANCEL" icon="x" iconRight={false} onPress={handleCancel} />
+      </BottomActionBar>
+    </Screen>
   );
 };
 
 export default PauseScreen;
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
+  // Overflow menu
+  menuOverlay: { flex: 1, backgroundColor: 'transparent' },
+  menuCard: {
+    position: 'absolute',
+    right: layout.screenPaddingHorizontal,
+    minWidth: 180,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing.xs,
+    ...shadows.card,
   },
-  container: {
+  menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md, paddingHorizontal: spacing.lg },
+  menuItemBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.divider },
+  menuItemText: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+
+  content: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 24,
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xxl,
   },
 
-  /* HEADER */
-  headerRow: {
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 12,
+  // Hero visualization
+  hero: { width: HERO, height: HERO, alignItems: 'center', justifyContent: 'center' },
+  glow: {
+    position: 'absolute',
+    width: 210,
+    height: 210,
+    top: center(210),
+    left: center(210),
+    borderRadius: 105,
+    backgroundColor: colors.primaryTint,
+  },
+  ringStatic: {
+    position: 'absolute',
+    width: 198,
+    height: 198,
+    top: center(198),
+    left: center(198),
+    borderRadius: 99,
+    borderWidth: 6,
+    borderColor: colors.primaryTintBorder,
+  },
+  disc: {
+    width: 132,
+    height: 132,
+    borderRadius: 66,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.card,
+  },
+
+  title: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginTop: spacing.xxxl,
+    letterSpacing: 0.2,
+  },
+  message: {
+    ...typography.subtitle,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.md,
+    lineHeight: 22,
+    maxWidth: 320,
+  },
+
+  // Status pill
+  statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primaryTint,
+    borderWidth: 1,
+    borderColor: colors.primaryTintBorder,
   },
-  logoContainer: {
-    width: 60,
-    height: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoImage: {
-    width: 60,
-    height: 60,
-  },
-
-  /* CENTER CONTENT */
-  centerSection: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  loaderContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  pauseText: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#2D3748',
-    textAlign: 'center',
-    letterSpacing: 0.5,
-    marginBottom: 36,
-  },
-
-  /* CANCEL BUTTON */
-  cancelButton: {
-    backgroundColor: '#FF4D4D',
-    paddingVertical: 14,
-    paddingHorizontal: 54,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#FF4D4D',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-  },
-  cancelButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: 1.5,
-  },
-
-  /* FOOTER SPACER */
-  footerSpacer: {
-    height: 40,
-  },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary, marginRight: spacing.sm },
+  statusText: { fontSize: 13, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 },
 });

@@ -1,376 +1,147 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  StatusBar,
-  ScrollView,
-  Image,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
+import { Screen, MainHeader, Eyebrow, IconButton, PrimaryButton, BottomActionBar } from './ui';
+import { colors, spacing, radii, shadows, typography } from './theme';
 
-const TOTAL_LEVEL_BARS = 18; // Total bars in the slider indicator
+const TOTAL_LEVEL_BARS = 18;
 
 const GrindSettingScreen = ({ route, navigation }) => {
-  // Receive grain details from navigation or fallback to Ragi
+  // --- functionality preserved exactly ---
   const grainName = route?.params?.grainName || 'Premium Ragi Grains';
-  const grainImage =
-    route?.params?.grainImage || require('../assets/images/ragi.png');
+  const grainImage = route?.params?.grainImage || require('../assets/images/ragi.png');
 
-  // Grind Level State (Default level 12)
   const [level, setLevel] = useState(12);
 
   const handleDecrease = () => {
     if (level > 1) setLevel((prev) => prev - 1);
   };
-
   const handleIncrease = () => {
     if (level < TOTAL_LEVEL_BARS) setLevel((prev) => prev + 1);
   };
-
   const handleYes = () => {
-    if (navigation?.navigate) {
-      navigation.navigate('CleanStoneChoiceScreen'); // <-- Replace with your START screen name
-    }
+    if (navigation?.navigate) navigation.navigate('CleanStoneChoiceScreen');
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-
-      {/* Top Header */}
-      <View style={styles.headerBar}>
-        {/* <TouchableOpacity
-          style={styles.iconBtn}
-          onPress={() => navigation?.goBack()}
-        >
-          <Feather name="menu" size={22} color="#3E1A5B" />
-        </TouchableOpacity> */}
-
-        <Text style={styles.headerTitle}>My Kitchen Tools</Text>
-
-        <TouchableOpacity style={styles.avatarCircle}>
-          <Feather name="user" size={16} color="#FFFFFF" />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <View style={styles.mainContainer}>
-          {/* Logo Banner */}
-          <View style={styles.bannerContainer}>
-            <Image
-              source={require('../assets/images/capture.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-            <Text style={styles.tagline}>
-              Smart Home Automation Products
-            </Text>
+    <Screen background={colors.background}>
+      {/* Header: same MainHeader structure/spacing as the rest of the flow.
+          The avatar (existing, decorative) is kept in the right slot exactly
+          as before, matching SelectGrainScreen — no HeaderMenu is added here
+          since it wasn't part of the original screen. */}
+      <MainHeader
+        greeting="My Kitchen Tools"
+        title="Grind Setting"
+        onBack={navigation?.goBack ? () => navigation.goBack() : undefined}
+        right={
+          <View style={styles.avatarCircle}>
+            <Feather name="user" size={16} color={colors.textOnPrimary} />
           </View>
+        }
+      />
 
-          {/* Current Ingredient Card */}
-          <View style={styles.cardWrapper}>
-            <View style={styles.ingredientCard}>
-              <Image
-                source={grainImage}
-                style={styles.grainImage}
-                resizeMode="contain"
-              />
-
-              <Text style={styles.subHeaderTitle}>CURRENT INGREDIENT</Text>
-              <Text style={styles.grainTitle}>{grainName}</Text>
-            </View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {/* Current ingredient */}
+        <View style={styles.ingredientCard}>
+          <View style={styles.ingredientThumb}>
+            <Image source={grainImage} style={styles.grainImage} resizeMode="contain" />
           </View>
-
-          {/* Grind Setting Section */}
-          <View style={styles.grindSettingContainer}>
-            <Text style={styles.grindHeader}>GRIND SETTING</Text>
-
-            {/* Labels Row */}
-            <View style={styles.labelRow}>
-              <Text style={styles.coarseFineText}>COARSE</Text>
-              <Text style={styles.levelValueText}>Level {level}</Text>
-              <Text style={styles.coarseFineText}>FINE</Text>
-            </View>
-
-            {/* Slider Controls (Minus [-], Level Bars, Plus [+]) */}
-            <View style={styles.controlRow}>
-              {/* Minus Button */}
-              <TouchableOpacity
-                style={styles.stepButton}
-                activeOpacity={0.8}
-                onPress={handleDecrease}
-              >
-                <Feather name="minus" size={20} color="#FFFFFF" />
-              </TouchableOpacity>
-
-              {/* Dynamic Bars Track */}
-              <View style={styles.barsContainer}>
-                {Array.from({ length: TOTAL_LEVEL_BARS }).map((_, index) => {
-                  const isFilled = index < level;
-                  return (
-                    <View
-                      key={index}
-                      style={[
-                        styles.singleBar,
-                        isFilled ? styles.filledBar : styles.unfilledBar,
-                      ]}
-                    />
-                  );
-                })}
-              </View>
-
-              {/* Plus Button */}
-              <TouchableOpacity
-                style={styles.stepButton}
-                activeOpacity={0.8}
-                onPress={handleIncrease}
-              >
-                <Feather name="plus" size={20} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
+          <View style={{ flex: 1 }}>
+            <Eyebrow>Current ingredient</Eyebrow>
+            <Text style={styles.grainTitle}>{grainName}</Text>
           </View>
-
-          {/* Start Action Button */}
-          <TouchableOpacity
-            style={styles.startButton}
-            activeOpacity={0.85}
-            onPress={handleYes} // ✅ Clean & directly invokes handleYes()
-          >
-            <Text style={styles.startButtonText}>START</Text>
-          </TouchableOpacity>
         </View>
 
-        {/* Footer */}
-        <Text style={styles.footerText}>Powered by EVOLUZN</Text>
+        {/* Grind setting */}
+        <View style={styles.settingCard}>
+          <Text style={styles.settingHeader}>GRIND SETTING</Text>
+
+          <View style={styles.labelRow}>
+            <Text style={styles.edgeLabel}>COARSE</Text>
+            <Text style={styles.levelValue}>Level {level}</Text>
+            <Text style={styles.edgeLabel}>FINE</Text>
+          </View>
+
+          <View style={styles.controlRow}>
+            <IconButton name="minus" onPress={handleDecrease} variant="solid" size={20} accessibilityLabel="Decrease level" />
+            <View style={styles.barsContainer}>
+              {Array.from({ length: TOTAL_LEVEL_BARS }).map((_, index) => (
+                <View
+                  key={index}
+                  style={[styles.singleBar, index < level ? styles.filledBar : styles.unfilledBar]}
+                />
+              ))}
+            </View>
+            <IconButton name="plus" onPress={handleIncrease} variant="solid" size={20} accessibilityLabel="Increase level" />
+          </View>
+        </View>
+
+        <Text style={styles.footer}>Powered by EVOLUZN</Text>
       </ScrollView>
-    </SafeAreaView>
+
+      {/* Bottom action area: same fixed BottomActionBar treatment as the rest
+          of the flow, instead of START scrolling with the content. */}
+      <BottomActionBar>
+        <PrimaryButton title="START" icon="play" onPress={handleYes} />
+      </BottomActionBar>
+    </Screen>
   );
 };
 
 export default GrindSettingScreen;
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-
-  /* Top Navigation Header */
-  headerBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-  },
-
-  iconBtn: {
-    padding: 4,
-  },
-
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#3E1A5B',
-  },
-
   avatarCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#3E1A5B',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  /* Scroll Content */
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'space-between',
-    paddingBottom: 20,
-    backgroundColor: '#FAFAFD',
-  },
-
-  mainContainer: {
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-
-  /* Logo Banner */
-  bannerContainer: {
-    alignItems: 'center',
-    paddingTop: 16,
-    paddingBottom: 16,
-  },
-
-  logoImage: {
-    width: 170,
-    height: 44,
-    marginBottom: 4,
-  },
-
-  tagline: {
-    fontSize: 11,
-    color: '#8E8E93',
-    fontWeight: '500',
-  },
-
-  /* Ingredient Card */
-  cardWrapper: {
-    width: '100%',
-    marginVertical: 10,
-  },
-
-  ingredientCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    paddingVertical: 24,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#EFEFEF',
-
-    // Soft Elevation Shadow
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-
-  grainImage: {
-    width: 160,
-    height: 160,
-    marginBottom: 20,
-  },
-
-  subHeaderTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#522D70',
-    letterSpacing: 0.8,
-    marginBottom: 4,
-  },
-
-  grainTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#1A1A1A',
-    textAlign: 'center',
-  },
-
-  /* Grind Setting Section */
-  grindSettingContainer: {
-    width: '100%',
-    alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 28,
-  },
-
-  grindHeader: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#522D70',
-    letterSpacing: 0.8,
-    marginBottom: 12,
-  },
-
-  labelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    paddingHorizontal: 10,
-    marginBottom: 12,
-  },
-
-  coarseFineText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#8E8E93',
-    letterSpacing: 0.5,
-  },
-
-  levelValueText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#2C2C2E',
-  },
-
-  /* Slider Controls Row */
-  controlRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    gap: 10,
-  },
-
-  stepButton: {
     width: 40,
     height: 40,
-    borderRadius: 10,
-    backgroundColor: '#522D70',
-    justifyContent: 'center',
+    borderRadius: 20,
+    backgroundColor: colors.primary,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-
-  barsContainer: {
-    flex: 1,
+  scrollContent: {
+    paddingHorizontal: spacing.xxl,
+    paddingBottom: spacing.xxxl,
+    paddingTop: spacing.md,
+  },
+  ingredientCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#EFEFEF',
-    height: 38,
-    borderRadius: 8,
-    paddingHorizontal: 10,
+    gap: spacing.lg,
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    ...shadows.card,
   },
-
-  singleBar: {
-    width: 4,
-    height: 22,
-    borderRadius: 2,
-  },
-
-  filledBar: {
-    backgroundColor: '#522D70',
-  },
-
-  unfilledBar: {
-    backgroundColor: '#D1D1D6',
-  },
-
-  /* Start Button */
-  startButton: {
-    backgroundColor: '#522D70',
-    paddingVertical: 12,
-    paddingHorizontal: 64,
-    borderRadius: 10,
+  ingredientThumb: {
+    width: 72,
+    height: 72,
+    borderRadius: radii.lg,
+    backgroundColor: colors.primaryTint,
     alignItems: 'center',
     justifyContent: 'center',
-    width: '60%',
   },
-
-  startButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0.8,
+  grainImage: { width: 52, height: 52 },
+  grainTitle: { ...typography.title, color: colors.textPrimary, marginTop: 4 },
+  settingCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.xl,
+    marginTop: spacing.lg,
+    ...shadows.subtle,
   },
-
-  /* Footer */
-  footerText: {
-    textAlign: 'center',
-    fontSize: 10,
-    fontWeight: '500',
-    color: '#A0A0A5',
-    marginTop: 20,
-  },
+  settingHeader: { ...typography.eyebrow, color: colors.primary, marginBottom: spacing.lg },
+  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
+  edgeLabel: { ...typography.caption, color: colors.textMuted },
+  levelValue: { ...typography.subtitle, color: colors.primary, fontWeight: '800' },
+  controlRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  barsContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 3, height: 40 },
+  singleBar: { flex: 1, borderRadius: 3 },
+  filledBar: { height: 34, backgroundColor: colors.primary },
+  unfilledBar: { height: 16, backgroundColor: colors.primarySubtle },
+  footer: { ...typography.caption, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xxl },
 });

@@ -3,32 +3,23 @@ import {
   Text,
   View,
   TextInput,
-  TouchableOpacity,
   ScrollView,
   Switch,
   Alert,
   Animated,
-  StatusBar,
+  Pressable,
 } from 'react-native';
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import Feather from 'react-native-vector-icons/Feather';
 import { useAppTheme } from '../services/theme';
-
-// Rasoi Shop Brand Color Palette
-const RASOI_BRAND = {
-  primary: '#C2410C', // Deep Terracotta / Spice Red
-  primaryDark: '#9A3412',
-  primaryLight: '#FFF7ED', // Warm Cream Background Tint
-  accentGold: '#D97706', // Warm Amber / Saffron
-  statusGreen: '#16A34A',
-  statusGreenBg: 'rgba(22, 163, 74, 0.16)',
-  darkCard: '#1C1917', // Cast Iron Warm Black
-};
+import { colors, spacing, radii, typography, shadows, layout } from './theme';
+import { Screen, MainHeader, Card, SecondaryButton } from './ui';
 
 const SettingsScreen = ({ navigation }) => {
-  const { colors, isDark } = useAppTheme();
-  const styles = createStyles(colors);
+  // Kept for the status-bar / dark-mode contract; visuals use brand tokens so
+  // Settings matches the rest of the app instead of the old copied dark theme.
+  const { isDark } = useAppTheme();
 
   // Local static/UI state
   const [user] = useState({
@@ -46,7 +37,7 @@ const SettingsScreen = ({ navigation }) => {
   const [notificationEmail, setNotificationEmail] = useState(user.email);
   const [notificationErrors, setNotificationErrors] = useState({});
 
-  // Header fade-in animation
+  // Content fade-in animation
   const headerFade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -97,513 +88,564 @@ const SettingsScreen = ({ navigation }) => {
     Alert.alert('Success', 'Notification preferences saved locally.');
   }, [validateNotificationSettings]);
 
+  // Small reusable section header with a tinted icon chip on the left.
+  const SectionLabel = ({ icon, title }) => (
+    <View style={styles.sectionHeaderRow}>
+      <View style={styles.sectionIconChip}>
+        <Feather name={icon} size={15} color={colors.primary} />
+      </View>
+      <Text style={styles.sectionTitle}>{title}</Text>
+    </View>
+  );
+
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-    >
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.background}
-      />
+    <Screen barStyle={isDark ? 'light-content' : 'dark-content'}>
+      {/* Shared primary-screen header (System A keeps the bottom tab bar). */}
+      <MainHeader title="Settings" right={null} />
 
-      {/* Header without 'Rasoi Account' */}
-      <Animated.View style={[styles.header, { opacity: headerFade }]}>
-        <Text style={styles.screenTitle}>Settings</Text>
-      </Animated.View>
-
-      {/* Identity Card */}
-      <View style={styles.identityCard}>
-        <View style={styles.identityTop}>
-          <View style={styles.identityAvatar}>
-            <Text style={styles.identityAvatarText}>
-              {userName ? userName.charAt(0).toUpperCase() : 'R'}
-            </Text>
-          </View>
-          <View style={styles.identityInfo}>
-            <Text style={styles.identityName} numberOfLines={1}>
-              {userName || '—'}
-            </Text>
-            <Text style={styles.identityEmail} numberOfLines={1}>
-              {email || '—'}
-            </Text>
-          </View>
-          <View style={styles.statusBadge}>
-            <View style={styles.statusDot} />
-            <Text style={styles.statusText}>VERIFIED</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Profile Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Profile Details</Text>
-          <Feather name="user" size={16} color={RASOI_BRAND.primary} />
-        </View>
-
-        <View style={styles.card}>
-          <View style={styles.dataRow}>
-            <Text style={styles.dataLabel}>Name</Text>
-            <Text style={styles.dataValue} numberOfLines={1}>
-              {userName || 'Not set'}
-            </Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.dataRow}>
-            <Text style={styles.dataLabel}>Email</Text>
-            <Text style={styles.dataValue} numberOfLines={1}>
-              {email || 'Not set'}
-            </Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.dataRow}>
-            <Text style={styles.dataLabel}>Phone</Text>
-            <Text style={styles.dataValue} numberOfLines={1}>
-              {contact || 'Not available'}
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.editButton}
-            activeOpacity={0.85}
-            onPress={() => navigation.navigate('EditProfile')}
-          >
-            <Text style={styles.editButtonText}>Edit Profile</Text>
-            <Feather name="arrow-right" size={16} color={RASOI_BRAND.primary} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Notifications Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Notifications & Alerts</Text>
-          <Feather name="bell" size={16} color={RASOI_BRAND.primary} />
-        </View>
-
-        <View style={styles.card}>
-          {/* SMS Alerts */}
-          <View style={styles.switchRow}>
-            <View style={styles.switchTextWrapper}>
-              <Text style={styles.deviceLabel}>SMS Alerts</Text>
-              <Text style={styles.deviceSubLabel}>
-                Receive recipe & appliance updates via text
-              </Text>
-            </View>
-            <Switch
-              value={smsEnabled}
-              onValueChange={setSmsEnabled}
-              trackColor={{ false: '#E5E7EB', true: RASOI_BRAND.primary }}
-              thumbColor="#FFFFFF"
-              ios_backgroundColor="#E5E7EB"
-            />
-          </View>
-
-          {smsEnabled ? (
-            <View style={styles.fieldWrapper}>
-              <Text style={styles.fieldLabel}>Send SMS To</Text>
-              <View
-                style={[
-                  styles.inputRow,
-                  notificationErrors.smsNumber && styles.inputRowError,
-                ]}
-              >
-                <TextInput
-                  style={styles.textInput}
-                  value={smsNumber}
-                  onChangeText={setSmsNumber}
-                  placeholder="Enter 10-digit phone number"
-                  placeholderTextColor={colors.subText}
-                  keyboardType="phone-pad"
-                />
-              </View>
-              {notificationErrors.smsNumber ? (
-                <Text style={styles.errorText}>{notificationErrors.smsNumber}</Text>
-              ) : null}
-            </View>
-          ) : null}
-
-          <View style={styles.divider} />
-
-          {/* Email Alerts */}
-          <View style={styles.switchRow}>
-            <View style={styles.switchTextWrapper}>
-              <Text style={styles.deviceLabel}>Email Alerts</Text>
-              <Text style={styles.deviceSubLabel}>
-                Receive order & service updates via email
-              </Text>
-            </View>
-            <Switch
-              value={emailEnabled}
-              onValueChange={setEmailEnabled}
-              trackColor={{ false: '#E5E7EB', true: RASOI_BRAND.primary }}
-              thumbColor="#FFFFFF"
-              ios_backgroundColor="#E5E7EB"
-            />
-          </View>
-
-          {emailEnabled ? (
-            <View style={[styles.fieldWrapper, styles.fieldWrapperLast]}>
-              <Text style={styles.fieldLabel}>Send Email To</Text>
-              <View
-                style={[
-                  styles.inputRow,
-                  notificationErrors.notificationEmail && styles.inputRowError,
-                ]}
-              >
-                <TextInput
-                  style={styles.textInput}
-                  value={notificationEmail}
-                  onChangeText={setNotificationEmail}
-                  placeholder="Enter email address"
-                  placeholderTextColor={colors.subText}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </View>
-              {notificationErrors.notificationEmail ? (
-                <Text style={styles.errorText}>
-                  {notificationErrors.notificationEmail}
-                </Text>
-              ) : null}
-            </View>
-          ) : null}
-
-          {smsEnabled || emailEnabled ? (
-            <TouchableOpacity
-              style={styles.editButton}
-              activeOpacity={0.85}
-              onPress={handleSaveNotifications}
-            >
-              <Text style={styles.editButtonText}>Save Notification Preferences</Text>
-              <Feather name="check" size={16} color={RASOI_BRAND.primary} />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      </View>
-
-      {/* Devices Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>My Appliances</Text>
-          <Feather name="cpu" size={16} color={RASOI_BRAND.primary} />
-        </View>
-
-        <View style={styles.card}>
-          <View style={styles.deviceRow}>
-            <View>
-              <Text style={styles.deviceLabel}>Registered Kitchen Devices</Text>
-              <Text style={styles.deviceSubLabel}>
-                Connected to your Rasoi account
-              </Text>
-            </View>
-            <Text style={styles.deviceCount}>{productCount}</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Logout */}
-      <TouchableOpacity
-        style={styles.logoutButton}
-        activeOpacity={0.85}
-        onPress={() => navigation.replace('Login')}
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        <Feather
-          name="log-out"
-          size={18}
-          color="#DC2626"
-          style={styles.logoutIcon}
-        />
-        <Text style={styles.logoutText}>Logout</Text>
-      </TouchableOpacity>
+        {/* Profile hero — anchors the screen with brand identity */}
+        <Animated.View style={{ opacity: headerFade }}>
+          <View style={styles.hero}>
+            <View style={styles.heroTop}>
+              <View style={styles.heroAvatar}>
+                <Text style={styles.heroAvatarText}>
+                  {userName ? userName.charAt(0).toUpperCase() : 'R'}
+                </Text>
+              </View>
+              <View style={styles.heroInfo}>
+                <Text style={styles.heroName} numberOfLines={1}>
+                  {userName || '—'}
+                </Text>
+                <Text style={styles.heroEmail} numberOfLines={1}>
+                  {email || '—'}
+                </Text>
+              </View>
+              <View style={styles.verifiedPill}>
+                <Feather name="check-circle" size={12} color={colors.textOnPrimary} />
+                <Text style={styles.verifiedText}>Verified</Text>
+              </View>
+            </View>
 
-      <Text style={styles.version}>Rasoi Shop App v1.0.0</Text>
-    </ScrollView>
+            <View style={styles.heroDivider} />
+
+            {/* Quick stats strip */}
+            <View style={styles.heroStats}>
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatValue}>{productCount}</Text>
+                <Text style={styles.heroStatLabel}>Machines</Text>
+              </View>
+              <View style={styles.heroStatSep} />
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatValue}>Active</Text>
+                <Text style={styles.heroStatLabel}>Account</Text>
+              </View>
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* Profile Section */}
+        <View style={styles.section}>
+          <SectionLabel icon="user" title="Profile Details" />
+
+          <Card padded={false} style={styles.cardInner}>
+            <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Name</Text>
+              <Text style={styles.dataValue} numberOfLines={1}>
+                {userName || 'Not set'}
+              </Text>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Email</Text>
+              <Text style={styles.dataValue} numberOfLines={1}>
+                {email || 'Not set'}
+              </Text>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Phone</Text>
+              <Text style={styles.dataValue} numberOfLines={1}>
+                {contact || 'Not available'}
+              </Text>
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* Edit Profile as a list row */}
+            <Pressable
+              style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.7 }]}
+              onPress={() => navigation.navigate('EditProfile')}
+              accessibilityRole="button"
+            >
+              <View style={styles.linkRowLeft}>
+                <View style={styles.rowIconChip}>
+                  <Feather name="edit-3" size={15} color={colors.primary} />
+                </View>
+                <Text style={styles.linkRowText}>Edit Profile</Text>
+              </View>
+              <Feather name="chevron-right" size={20} color={colors.textMuted} />
+            </Pressable>
+          </Card>
+        </View>
+
+        {/* Notifications Section */}
+        <View style={styles.section}>
+          <SectionLabel icon="bell" title="Notifications & Alerts" />
+
+          <Card padded={false} style={styles.cardInner}>
+            {/* SMS Alerts */}
+            <View style={styles.switchRow}>
+              <View style={styles.rowIconChip}>
+                <Feather name="message-square" size={15} color={colors.primary} />
+              </View>
+              <View style={styles.switchTextWrapper}>
+                <Text style={styles.itemLabel}>SMS Alerts</Text>
+                <Text style={styles.itemSubLabel}>
+                  Get grinding and maintenance alerts by text
+                </Text>
+              </View>
+              <Switch
+                value={smsEnabled}
+                onValueChange={setSmsEnabled}
+                trackColor={{ false: colors.borderStrong, true: colors.primary }}
+                thumbColor="#FFFFFF"
+                ios_backgroundColor={colors.borderStrong}
+              />
+            </View>
+
+            {smsEnabled ? (
+              <View style={styles.fieldWrapper}>
+                <Text style={styles.fieldLabel}>Send SMS To</Text>
+                <View
+                  style={[
+                    styles.inputRow,
+                    notificationErrors.smsNumber && styles.inputRowError,
+                  ]}
+                >
+                  <TextInput
+                    style={styles.textInput}
+                    value={smsNumber}
+                    onChangeText={setSmsNumber}
+                    placeholder="Enter 10-digit phone number"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+                {notificationErrors.smsNumber ? (
+                  <Text style={styles.errorText}>{notificationErrors.smsNumber}</Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            <View style={styles.divider} />
+
+            {/* Email Alerts */}
+            <View style={styles.switchRow}>
+              <View style={styles.rowIconChip}>
+                <Feather name="mail" size={15} color={colors.primary} />
+              </View>
+              <View style={styles.switchTextWrapper}>
+                <Text style={styles.itemLabel}>Email Alerts</Text>
+                <Text style={styles.itemSubLabel}>
+                  Get service and maintenance updates by email
+                </Text>
+              </View>
+              <Switch
+                value={emailEnabled}
+                onValueChange={setEmailEnabled}
+                trackColor={{ false: colors.borderStrong, true: colors.primary }}
+                thumbColor="#FFFFFF"
+                ios_backgroundColor={colors.borderStrong}
+              />
+            </View>
+
+            {emailEnabled ? (
+              <View style={[styles.fieldWrapper, styles.fieldWrapperLast]}>
+                <Text style={styles.fieldLabel}>Send Email To</Text>
+                <View
+                  style={[
+                    styles.inputRow,
+                    notificationErrors.notificationEmail && styles.inputRowError,
+                  ]}
+                >
+                  <TextInput
+                    style={styles.textInput}
+                    value={notificationEmail}
+                    onChangeText={setNotificationEmail}
+                    placeholder="Enter email address"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
+                {notificationErrors.notificationEmail ? (
+                  <Text style={styles.errorText}>
+                    {notificationErrors.notificationEmail}
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            {smsEnabled || emailEnabled ? (
+              <SecondaryButton
+                title="Save Notification Preferences"
+                icon="check"
+                onPress={handleSaveNotifications}
+                style={styles.inlineButton}
+              />
+            ) : null}
+          </Card>
+        </View>
+
+        {/* Devices Section */}
+        <View style={styles.section}>
+          <SectionLabel icon="cpu" title="My Devices" />
+
+          <Card padded={false} style={styles.cardInner}>
+            <View style={styles.deviceRow}>
+              <View style={styles.rowIconChip}>
+                <Feather name="hard-drive" size={15} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1, paddingRight: spacing.md }}>
+                <Text style={styles.itemLabel}>Registered Machines</Text>
+                <Text style={styles.itemSubLabel}>
+                  Connected to your Rasoi account
+                </Text>
+              </View>
+              <View style={styles.countPill}>
+                <Text style={styles.countPillText}>{productCount}</Text>
+              </View>
+            </View>
+          </Card>
+        </View>
+
+        {/* Logout */}
+        <Pressable
+          style={({ pressed }) => [styles.logoutButton, pressed && { opacity: 0.85 }]}
+          onPress={() => navigation.replace('Login')}
+          accessibilityRole="button"
+        >
+          <Feather name="log-out" size={18} color={colors.danger} style={styles.logoutIcon} />
+          <Text style={styles.logoutText}>Logout</Text>
+        </Pressable>
+
+        <Text style={styles.version}>Rasoi Shop App v1.0.0</Text>
+      </ScrollView>
+    </Screen>
   );
 };
 
 export default SettingsScreen;
 
-const createStyles = (colors) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    contentContainer: {
-      paddingHorizontal: 24,
-      paddingTop: 48, // Increased top padding for better breathing space
-      paddingBottom: 48,
-    },
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingHorizontal: layout.screenPaddingHorizontal,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.huge,
+  },
 
-    // Header
-    header: {
-      width: '100%',
-      marginBottom: 24,
-    },
-    screenTitle: {
-      fontSize: 32,
-      fontWeight: '800',
-      color: colors.text,
-      letterSpacing: -0.6,
-      width: '100%',
-    },
+  // Profile hero
+  hero: {
+    backgroundColor: colors.primary,
+    borderRadius: radii.xxl,
+    padding: spacing.xl,
+    marginBottom: spacing.xxl,
+    ...shadows.card,
+  },
+  heroTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  heroAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.28)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.md,
+  },
+  heroAvatarText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: colors.textOnPrimary,
+  },
+  heroInfo: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  heroName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.textOnPrimary,
+    marginBottom: 2,
+  },
+  heroEmail: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.72)',
+  },
+  verifiedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
+    gap: 5,
+  },
+  verifiedText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.textOnPrimary,
+    letterSpacing: 0.3,
+  },
+  heroDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    marginVertical: spacing.lg,
+  },
+  heroStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  heroStat: {
+    flex: 1,
+    alignItems: 'flex-start',
+  },
+  heroStatValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.textOnPrimary,
+  },
+  heroStatLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.7)',
+    letterSpacing: 0.4,
+    marginTop: 2,
+    textTransform: 'uppercase',
+  },
+  heroStatSep: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    marginHorizontal: spacing.lg,
+  },
 
-    // Identity Card
-    identityCard: {
-      backgroundColor: RASOI_BRAND.darkCard,
-      borderRadius: 24,
-      padding: 22,
-      marginBottom: 32,
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.15,
-      shadowRadius: 20,
-      elevation: 4,
-      borderWidth: 1,
-      borderColor: 'rgba(217, 119, 6, 0.2)',
-    },
-    identityTop: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    identityAvatar: {
-      width: 52,
-      height: 52,
-      borderRadius: 26,
-      backgroundColor: RASOI_BRAND.primary,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginRight: 14,
-    },
-    identityAvatarText: {
-      fontSize: 22,
-      fontWeight: '800',
-      color: '#FFFFFF',
-    },
-    identityInfo: {
-      flex: 1,
-      marginRight: 10,
-    },
-    identityName: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: '#FFFFFF',
-      marginBottom: 2,
-    },
-    identityEmail: {
-      fontSize: 13,
-      fontWeight: '400',
-      color: 'rgba(255,255,255,0.6)',
-    },
-    statusBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: RASOI_BRAND.statusGreenBg,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 20,
-    },
-    statusDot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: RASOI_BRAND.statusGreen,
-      marginRight: 6,
-    },
-    statusText: {
-      fontSize: 10,
-      fontWeight: '800',
-      color: RASOI_BRAND.statusGreen,
-      letterSpacing: 0.5,
-    },
+  // Sections
+  section: {
+    marginBottom: spacing.xxl,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.xs,
+  },
+  sectionIconChip: {
+    width: 30,
+    height: 30,
+    borderRadius: radii.sm,
+    backgroundColor: colors.primaryTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    letterSpacing: 0.2,
+  },
 
-    // Sections
-    section: {
-      marginBottom: 28,
-    },
-    sectionHeaderRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 12,
-      paddingHorizontal: 4,
-    },
-    sectionTitle: {
-      fontSize: 15,
-      fontWeight: '700',
-      color: colors.text,
-      letterSpacing: -0.2,
-    },
+  cardInner: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
+  },
 
-    card: {
-      backgroundColor: colors.card,
-      borderRadius: 20,
-      paddingHorizontal: 18,
-      paddingVertical: 6,
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.04,
-      shadowRadius: 16,
-      elevation: 1,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
+  // Row icon chip (used in list/switch/device rows)
+  rowIconChip: {
+    width: 34,
+    height: 34,
+    borderRadius: radii.sm,
+    backgroundColor: colors.primaryTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
 
-    dataRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingVertical: 16,
-    },
-    dataLabel: {
-      fontSize: 14,
-      fontWeight: '400',
-      color: colors.subText,
-    },
-    dataValue: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: colors.text,
-      maxWidth: '60%',
-      textAlign: 'right',
-    },
-    divider: {
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.border,
-    },
+  dataRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.lg,
+  },
+  dataLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  dataValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    maxWidth: '60%',
+    textAlign: 'right',
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.divider,
+  },
 
-    editButton: {
-      marginTop: 10,
-      marginBottom: 16,
-      backgroundColor: RASOI_BRAND.primaryLight,
-      borderWidth: 1,
-      borderColor: 'rgba(194, 65, 12, 0.15)',
-      borderRadius: 14,
-      paddingVertical: 14,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 6,
-    },
-    editButtonText: {
-      color: RASOI_BRAND.primary,
-      fontWeight: '700',
-      fontSize: 14,
-    },
+  // Tappable list row
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+  },
+  linkRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  linkRowText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
 
-    // Switches & inputs
-    switchRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingVertical: 16,
-    },
-    switchTextWrapper: {
-      flex: 1,
-      marginRight: 12,
-    },
-    fieldWrapper: {
-      paddingBottom: 16,
-    },
-    fieldWrapperLast: {
-      paddingBottom: 6,
-    },
-    fieldLabel: {
-      fontSize: 11,
-      fontWeight: '700',
-      color: RASOI_BRAND.accentGold,
-      marginBottom: 8,
-      textTransform: 'uppercase',
-      letterSpacing: 0.4,
-    },
-    inputRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: colors.background,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    inputRowError: {
-      borderColor: '#FCA5A5',
-      backgroundColor: '#FEF2F2',
-    },
-    textInput: {
-      flex: 1,
-      fontSize: 14,
-      fontWeight: '600',
-      color: colors.text,
-      padding: 0,
-    },
-    errorText: {
-      fontSize: 12,
-      fontWeight: '500',
-      color: '#DC2626',
-      marginTop: 6,
-    },
+  inlineButton: {
+    marginTop: spacing.md,
+    marginBottom: spacing.lg,
+  },
 
-    // Devices
-    deviceRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingVertical: 18,
-    },
-    deviceLabel: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: colors.text,
-      marginBottom: 3,
-    },
-    deviceSubLabel: {
-      fontSize: 12,
-      fontWeight: '400',
-      color: colors.subText,
-    },
-    deviceCount: {
-      fontSize: 22,
-      fontWeight: '800',
-      color: RASOI_BRAND.primary,
-      letterSpacing: -0.4,
-    },
+  // Switches & inputs
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+  },
+  switchTextWrapper: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  itemLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 3,
+  },
+  itemSubLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  fieldWrapper: {
+    paddingBottom: spacing.lg,
+  },
+  fieldWrapperLast: {
+    paddingBottom: spacing.sm,
+  },
+  fieldLabel: {
+    ...typography.eyebrow,
+    color: colors.primary,
+    marginBottom: spacing.sm,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  inputRowError: {
+    borderColor: colors.danger,
+    backgroundColor: colors.dangerTint,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    padding: 0,
+  },
+  errorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.danger,
+    marginTop: 6,
+  },
 
-    // Logout
-    logoutButton: {
-      marginTop: 8,
-      marginBottom: 24,
-      backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: '#FEE2E2',
-      paddingVertical: 16,
-      borderRadius: 16,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    logoutIcon: {
-      marginRight: 8,
-    },
-    logoutText: {
-      color: '#DC2626',
-      fontWeight: '700',
-      fontSize: 15,
-    },
+  // Devices
+  deviceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+  },
+  countPill: {
+    minWidth: 34,
+    height: 34,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primaryTint,
+    borderWidth: 1,
+    borderColor: colors.primaryTintBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countPillText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.primary,
+  },
 
-    version: {
-      textAlign: 'center',
-      color: colors.subText,
-      fontSize: 12,
-      fontWeight: '500',
-      letterSpacing: 0.2,
-    },
-  });
+  // Logout
+  logoutButton: {
+    marginTop: spacing.sm,
+    marginBottom: spacing.xxl,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.dangerTint,
+    paddingVertical: spacing.lg,
+    borderRadius: radii.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoutIcon: {
+    marginRight: spacing.sm,
+  },
+  logoutText: {
+    color: colors.danger,
+    fontWeight: '800',
+    fontSize: 15,
+  },
+
+  version: {
+    textAlign: 'center',
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 0.2,
+  },
+});

@@ -1,30 +1,139 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  StyleSheet,
-  Text,
   View,
-  TouchableOpacity,
-  Image,
-  SafeAreaView,
-  StatusBar,
+  Text,
+  StyleSheet,
   Animated,
+  Easing,
+  Modal,
+  Pressable,
 } from 'react-native';
+import Feather from 'react-native-vector-icons/Feather';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  Screen,
+  MainHeader,
+  IconButton,
+  StepIndicator,
+  Eyebrow,
+  StatusIcon,
+  Toggle,
+  PrimaryButton,
+  StatusBadge,
+  BottomActionBar,
+  AppDialog,
+} from './ui';
+import { colors, spacing, typography, radii, shadows, layout } from './theme';
+
+/* -------------------------------------------------------------------------- */
+/*  HeaderMenu — static overflow (kebab) menu. No API / no dynamic data.       */
+/*    Items are defined locally; "Help" opens a themed dialog with static text. */
+/* -------------------------------------------------------------------------- */
+const HeaderMenu = () => {
+  const [open, setOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const insets = useSafeAreaInsets();
+
+  const items = [
+    { icon: 'help-circle', label: 'Help', onPress: () => setHelpOpen(true) },
+  ];
+
+  return (
+    <>
+      <IconButton
+        name="more-vertical"
+        variant="ghost"
+        onPress={() => setOpen(true)}
+        accessibilityLabel="More options"
+      />
+
+      <Modal
+        transparent
+        visible={open}
+        animationType="fade"
+        onRequestClose={() => setOpen(false)}
+      >
+        <Pressable style={styles.menuOverlay} onPress={() => setOpen(false)}>
+          <View style={[styles.menuCard, { top: insets.top + layout.headerContentHeight + spacing.sm }]}>
+            {items.map((item, i) => (
+              <Pressable
+                key={item.label}
+                onPress={() => {
+                  setOpen(false);
+                  item.onPress();
+                }}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.menuItem,
+                  i > 0 && styles.menuItemBorder,
+                  pressed && { backgroundColor: colors.primaryTint },
+                ]}
+              >
+                <Feather name={item.icon} size={18} color={colors.primary} style={{ marginRight: spacing.md }} />
+                <Text style={styles.menuItemText}>{item.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Themed help dialog (static content) */}
+      <AppDialog
+        visible={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        icon="help-circle"
+        title="Help"
+        message="Turn on the switch below and select your Wi-Fi network so your machine can receive settings and status updates."
+        confirmLabel="Got it"
+        onConfirm={() => setHelpOpen(false)}
+      />
+    </>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/*  WifiHero — layered visualization, matching CleaningHero's composition     */
+/* -------------------------------------------------------------------------- */
+const HERO = 260;
+const center = (size) => (HERO - size) / 2;
+
+const WifiHero = ({ connected }) => {
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    );
+    pulseLoop.start();
+    return () => pulseLoop.stop();
+  }, [pulse]);
+
+  const glowScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.08] });
+  const glowOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.55] });
+
+  return (
+    <View style={styles.hero}>
+      <Animated.View style={[styles.glow, { transform: [{ scale: glowScale }], opacity: glowOpacity }]} />
+      <View style={styles.ringStatic} />
+      <View style={styles.ringArc} />
+      <View style={styles.disc}>
+        <StatusIcon icon="wifi" variant={connected ? 'success' : 'info'} size={64} />
+      </View>
+      <View style={styles.deviceChip}>
+        <Feather name="cpu" size={16} color={colors.primary} />
+      </View>
+    </View>
+  );
+};
 
 const ConnectWifiScreen = ({ navigation }) => {
+  // --- functionality preserved exactly ---
   const [isWifiEnabled, setIsWifiEnabled] = useState(false);
-  const animatedValue = useRef(new Animated.Value(0)).current;
 
-  const toggleSwitch = () => {
-    const toValue = isWifiEnabled ? 0 : 1;
-    
-    Animated.timing(animatedValue, {
-      toValue,
-      duration: 250,
-      useNativeDriver: false,
-    }).start();
-
-    setIsWifiEnabled(!isWifiEnabled);
-  };
+  const toggleSwitch = () => setIsWifiEnabled((prev) => !prev);
 
   const handleNext = () => {
     if (navigation?.navigate) {
@@ -32,200 +141,190 @@ const ConnectWifiScreen = ({ navigation }) => {
     }
   };
 
-  // Interpolations for custom switch animation
-  const translateX = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [4, 52], // Translates thumb inside track
-  });
-
-  const trackColor = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['#8E8E93', '#0A8F44'], // Gray to Green
-  });
-
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <View style={styles.container}>
+    <Screen background={colors.background}>
+      {/* Header: back + greeting/title (Home style) + static overflow menu. */}
+      <MainHeader
+        greeting="Machine Status"
+        title="Wi-Fi Setup"
+        onBack={navigation?.goBack ? () => navigation.goBack() : undefined}
+        right={<HeaderMenu />}
+      />
 
-        {/* Top Header Logo
-        <View style={styles.header}>
-          <View />
-          <Image
-            source={require('../assets/images/Softel Millet mill logo 2.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-        </View> */}
+      <View style={styles.content}>
+        <StepIndicator total={3} current={0} style={{ marginBottom: spacing.xxxl }} />
 
-        {/* Center Content Section */}
-        <View style={styles.centerSection}>
+        {/* Hero composition: visual -> eyebrow -> title -> description */}
+        <WifiHero connected={isWifiEnabled} />
 
-          {/* Title Prompt */}
-          <Text style={styles.instructionText}>
-            Please connect to WiFi
-          </Text>
+        <Eyebrow style={{ marginTop: spacing.xxxl }}>Step 1 of 3</Eyebrow>
+        <Text style={styles.title}>Connect your machine{'\n'}to Wi-Fi</Text>
+        <Text style={styles.message}>
+          A Wi-Fi connection lets your grinder receive settings and status updates
+          during setup and operation.
+        </Text>
 
-          {/* Custom Large Rounded Switch */}
-          <View style={styles.toggleContainer}>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={toggleSwitch}
-            >
-              <Animated.View style={[styles.customSwitchTrack, { backgroundColor: trackColor }]}>
-                <Animated.View
-                  style={[
-                    styles.customSwitchThumb,
-                    { transform: [{ translateX }] },
-                  ]}
-                />
-              </Animated.View>
-            </TouchableOpacity>
-
-            {/* Switch Labels */}
-            <View style={styles.labelRow}>
-              <Text style={[styles.switchLabel, !isWifiEnabled && styles.activeLabel]}>
-                NO
-              </Text>
-              <Text style={[styles.switchLabel, isWifiEnabled && styles.activeLabel]}>
-                YES
-              </Text>
-            </View>
+        {/* Connection state — real functionality, restyled to match the pill/card language */}
+        <View style={styles.stateCard}>
+          <View style={styles.stateRow}>
+            <Text style={styles.stateLabel}>Wi-Fi connection</Text>
+            <StatusBadge
+              label={isWifiEnabled ? 'Connected' : 'Not connected'}
+              variant={isWifiEnabled ? 'success' : 'info'}
+              icon={isWifiEnabled ? 'check-circle' : 'circle'}
+            />
           </View>
-
-          {/* Green Action Button */}
-          <TouchableOpacity
-            style={styles.button}
-            onPress={handleNext}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.buttonText}>NEXT</Text>
-            <Text style={styles.arrowIcon}>➔</Text>
-          </TouchableOpacity>
-
+          <Toggle value={isWifiEnabled} onValueChange={toggleSwitch} style={{ marginTop: spacing.lg }} />
         </View>
-
       </View>
-    </SafeAreaView>
+
+      <BottomActionBar>
+        <PrimaryButton title="NEXT" icon="arrow-right" onPress={handleNext} />
+      </BottomActionBar>
+    </Screen>
   );
 };
 
 export default ConnectWifiScreen;
 
 const styles = StyleSheet.create({
-  safeArea: {
+  // Overflow menu
+  menuOverlay: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'transparent',
   },
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 24,
+  menuCard: {
+    position: 'absolute',
+    right: layout.screenPaddingHorizontal,
+    minWidth: 180,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing.xs,
+    ...shadows.card,
   },
-
-  /* HEADER */
-  header: {
+  menuItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 8,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
   },
-  logo: {
-    width: 130,
-    height: 60,
+  menuItemBorder: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
   },
-
-  /* CENTER SECTION */
-  centerSection: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingBottom: 40,
-  },
-
-  /* TYPOGRAPHY */
-  instructionText: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#2C2C2C',
-    textAlign: 'center',
-    marginBottom: 40,
-  },
-
-  /* CUSTOM LARGE ROUNDED SWITCH */
-  toggleContainer: {
-    alignItems: 'center',
-    marginBottom: 44,
-  },
-  customSwitchTrack: {
-    width: 104,
-    height: 54,
-    borderRadius: 27, // Fully rounded pill shape
-    justifyContent: 'center',
-    padding: 4,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  customSwitchThumb: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-
-  labelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: 100,
-    marginTop: 12,
-    paddingHorizontal: 8,
-  },
-  switchLabel: {
+  menuItemText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#B0B0B0',
-    letterSpacing: 1,
-  },
-  activeLabel: {
-    color: '#2C2C2C',
+    color: colors.textPrimary,
   },
 
-  /* BUTTON */
-  button: {
-    flexDirection: 'row',
-    width: '100%',
-    maxWidth: 200,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: '#0A8F44', // Action Green
-    justifyContent: 'center',
+  content: {
+    flex: 1,
     alignItems: 'center',
+    paddingHorizontal: spacing.xxl,
+    paddingTop: spacing.xl,
+  },
 
-    // Elevation Shadow
-    elevation: 4,
-    shadowColor: '#0A8F44',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+  // Hero visualization
+  hero: {
+    width: HERO,
+    height: HERO,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 17,
+  glow: {
+    position: 'absolute',
+    width: 210,
+    height: 210,
+    top: center(210),
+    left: center(210),
+    borderRadius: 105,
+    backgroundColor: colors.primaryTint,
+  },
+  ringStatic: {
+    position: 'absolute',
+    width: 198,
+    height: 198,
+    top: center(198),
+    left: center(198),
+    borderRadius: 99,
+    borderWidth: 1,
+    borderColor: colors.primarySubtle,
+  },
+  ringArc: {
+    position: 'absolute',
+    width: 198,
+    height: 198,
+    top: center(198),
+    left: center(198),
+    borderRadius: 99,
+    borderWidth: 6,
+    borderColor: colors.primaryTintBorder,
+  },
+  disc: {
+    width: 132,
+    height: 132,
+    borderRadius: 66,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.card,
+  },
+  deviceChip: {
+    position: 'absolute',
+    bottom: center(198) - 4,
+    right: center(198) + 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.subtle,
+  },
+
+  title: {
+    fontSize: 22,
     fontWeight: '800',
-    letterSpacing: 1.5,
-    marginRight: 8,
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    letterSpacing: 0.2,
   },
-  arrowIcon: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
+  message: {
+    ...typography.subtitle,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.md,
+    lineHeight: 22,
+    maxWidth: 320,
+  },
+
+  stateCard: {
+    alignSelf: 'stretch',
+    marginTop: spacing.xxxl,
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.xl,
+    alignItems: 'center',
+    ...shadows.subtle,
+  },
+  stateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignSelf: 'stretch',
+  },
+  stateLabel: {
+    ...typography.subtitle,
+    color: colors.textPrimary,
   },
 });

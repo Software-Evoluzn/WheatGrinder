@@ -1,41 +1,94 @@
 import React, { useState } from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
-  Platform,
-  Image,
-} from 'react-native';
+import { StyleSheet, Text, View, Modal, Pressable } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  Screen,
+  MainHeader,
+  IconButton,
+  Eyebrow,
+  PrimaryButton,
+  BottomActionBar,
+  AppDialog,
+} from './ui';
+import { colors, spacing, radii, shadows, typography, layout } from './theme';
+
+/* -------------------------------------------------------------------------- */
+/*  HeaderMenu — static overflow (kebab) menu. No API / no dynamic data.       */
+/*    Items are defined locally; "Help" opens a themed dialog with static text. */
+/* -------------------------------------------------------------------------- */
+const HeaderMenu = () => {
+  const [open, setOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const insets = useSafeAreaInsets();
+
+  const items = [
+    { icon: 'help-circle', label: 'Help', onPress: () => setHelpOpen(true) },
+  ];
+
+  return (
+    <>
+      <IconButton
+        name="more-vertical"
+        variant="ghost"
+        onPress={() => setOpen(true)}
+        accessibilityLabel="More options"
+      />
+
+      <Modal
+        transparent
+        visible={open}
+        animationType="fade"
+        onRequestClose={() => setOpen(false)}
+      >
+        <Pressable style={styles.menuOverlay} onPress={() => setOpen(false)}>
+          <View style={[styles.menuCard, { top: insets.top + layout.headerContentHeight + spacing.sm }]}>
+            {items.map((item, i) => (
+              <Pressable
+                key={item.label}
+                onPress={() => {
+                  setOpen(false);
+                  item.onPress();
+                }}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.menuItem,
+                  i > 0 && styles.menuItemBorder,
+                  pressed && { backgroundColor: colors.primaryTint },
+                ]}
+              >
+                <Feather name={item.icon} size={18} color={colors.primary} style={{ marginRight: spacing.md }} />
+                <Text style={styles.menuItemText}>{item.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
+      <AppDialog
+        visible={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        icon="help-circle"
+        title="Help"
+        message="Use + and – to adjust how fast grain feeds into the grinder, then tap SET to confirm."
+        confirmLabel="Got it"
+        onConfirm={() => setHelpOpen(false)}
+      />
+    </>
+  );
+};
 
 const SetFlowRate = ({ navigation, route }) => {
-  // Fetch grain & texture parameters from route (Fallback defaults added)
+  // --- functionality preserved exactly ---
   const selectedGrain = route?.params?.grainName || 'WHEAT';
   const selectedTexture = route?.params?.texture || 'MEDIUM';
-
-  // Flow Rate percentage state (Default: 50%)
-  const [flowRate, setFlowRate] = useState(50);
+  const [flowRate, setFlowRate] = useState(50); // 10..100
 
   const handleBack = () => {
-    if (navigation?.goBack) {
-      navigation.goBack();
-    }
+    if (navigation?.goBack) navigation.goBack();
   };
-
-  // Decrement handler (Min: 10%)
-  const handleDecrease = () => {
-    setFlowRate((prev) => Math.max(10, prev - 10));
-  };
-
-  // Increment handler (Max: 100%)
-  const handleIncrease = () => {
-    setFlowRate((prev) => Math.min(100, prev + 10));
-  };
-
-  // PRESS SET button handler - Navigates to MillingControlScreen
+  const handleDecrease = () => setFlowRate((prev) => Math.max(10, prev - 10));
+  const handleIncrease = () => setFlowRate((prev) => Math.min(100, prev + 10));
   const handleSet = () => {
     navigation.navigate('MillingControlScreen', {
       grainName: selectedGrain,
@@ -44,246 +97,189 @@ const SetFlowRate = ({ navigation, route }) => {
     });
   };
 
+  const segments = 10;
+  const active = Math.round(flowRate / 10);
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <Screen background={colors.background}>
+      {/* Header: same MainHeader structure/spacing as the rest of the flow.
+          Grain (static for this screen) takes the title slot; flow rate is
+          the live value, so it moves into a pill below rather than the
+          header subtitle slot — same pattern as SetGrindTexture. */}
+      <MainHeader
+        greeting="My Kitchen Tools"
+        title={selectedGrain.toUpperCase()}
+        onBack={handleBack}
+        right={<HeaderMenu />}
+      />
 
-      <View style={styles.container}>
-        {/* TOP HEADER */}
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={handleBack}
-            activeOpacity={0.8}
-          >
-            <Feather name="arrow-left" size={22} color="#FFFFFF" />
-          </TouchableOpacity>
+      <View style={styles.flowPill}>
+        <View style={styles.dot} />
+        <Text style={styles.flowPillText}>Flow rate · {flowRate}%</Text>
+      </View>
 
-          <View style={styles.titleContainer}>
-            <Text style={styles.headerTitle}>
-              YOU HAVE CHOSEN : {selectedGrain.toUpperCase()}
-            </Text>
-            <Text style={styles.headerSubtitle}>
-              FLOW RATE : <Text style={styles.headerValue}>{flowRate}%</Text>
-            </Text>
+      <View style={styles.body}>
+        <Eyebrow style={{ alignSelf: 'center' }}>Grinding flow rate</Eyebrow>
+
+        {/* Hero composition: same glow/ring shell as the rest of the flow,
+            wrapped around the existing value dial (real state, unchanged). */}
+        <View style={styles.hero}>
+          <View style={styles.glow} />
+          <View style={styles.ringStatic} />
+          <View style={styles.ringArc} />
+          <View style={styles.valueCard}>
+            <Text style={styles.valueLabel}>{flowRate}%</Text>
+            <Text style={styles.valueSub}>flow rate</Text>
           </View>
-
-          {/* Logo Container */}
-          {/* <View style={styles.logoContainer}>
-            <Image
-              source={require('./assets/logo.png')} // Update path to your logo asset
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View> */}
         </View>
 
-        {/* MAIN BODY / FLOW RATE CONTROLS */}
-        <View style={styles.mainContent}>
-          <Text style={styles.sectionTitle}>Grinding Flow Rate</Text>
-
-          {/* ADJUSTMENT ROW */}
-          <View style={styles.adjustmentRow}>
-            {/* MINUS BUTTON */}
-            <TouchableOpacity
-              style={styles.circleButton}
-              onPress={handleDecrease}
-              activeOpacity={0.7}
-            >
-              <Feather name="minus" size={28} color="#2C2C2E" />
-            </TouchableOpacity>
-
-            {/* PROGRESS BAR TRACK */}
-            <View style={styles.progressTrackContainer}>
-              <View style={styles.progressTrack}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    { width: `${flowRate}%` },
-                  ]}
-                />
-              </View>
-            </View>
-
-            {/* PLUS BUTTON */}
-            <TouchableOpacity
-              style={styles.circleButton}
-              onPress={handleIncrease}
-              activeOpacity={0.7}
-            >
-              <Feather name="plus" size={28} color="#2C2C2E" />
-            </TouchableOpacity>
+        <View style={styles.stepperRow}>
+          <IconButton name="minus" onPress={handleDecrease} variant="ghost" size={24} accessibilityLabel="Decrease flow rate" />
+          <View style={styles.segments}>
+            {Array.from({ length: segments }).map((_, i) => (
+              <View key={i} style={[styles.segment, i < active && styles.segmentActive]} />
+            ))}
           </View>
+          <IconButton name="plus" onPress={handleIncrease} variant="ghost" size={24} accessibilityLabel="Increase flow rate" />
+        </View>
 
-          {/* PERCENTAGE DISPLAY */}
-          <Text style={styles.percentageText}>{flowRate} %</Text>
-
-          {/* PRESS SET BUTTON */}
-          <TouchableOpacity
-            style={styles.setButton}
-            onPress={handleSet}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.setButtonText}>PRESS SET</Text>
-          </TouchableOpacity>
+        <View style={styles.scaleLabels}>
+          <Text style={styles.scaleText}>LOW</Text>
+          <Text style={styles.scaleText}>HIGH</Text>
         </View>
       </View>
-    </SafeAreaView>
+
+      <BottomActionBar>
+        <PrimaryButton title="SET" icon="check" onPress={handleSet} />
+      </BottomActionBar>
+    </Screen>
   );
 };
 
 export default SetFlowRate;
 
+const HERO = 260;
+const center = (size) => (HERO - size) / 2;
+const DIAL = 200;
+
 const styles = StyleSheet.create({
-  safeArea: {
+  // Overflow menu
+  menuOverlay: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'transparent',
   },
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 24,
-    justifyContent: 'space-between',
+  menuCard: {
+    position: 'absolute',
+    right: layout.screenPaddingHorizontal,
+    minWidth: 180,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing.xs,
+    ...shadows.card,
   },
-
-  /* HEADER */
-  headerRow: {
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 12,
+  menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
   },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#5B8DEF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 3,
-    shadowColor: '#5B8DEF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+  menuItemBorder: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
   },
-  titleContainer: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#2C2C2E',
-    letterSpacing: 1.2,
-  },
-  headerSubtitle: {
-    fontSize: 14,
+  menuItemText: {
+    fontSize: 15,
     fontWeight: '700',
-    color: '#6B7280',
-    marginTop: 4,
-    letterSpacing: 1,
-  },
-  headerValue: {
-    color: '#5B8DEF',
-    fontWeight: '800',
-  },
-  logoContainer: {
-    width: 50,
-    height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoImage: {
-    width: 50,
-    height: 50,
+    color: colors.textPrimary,
   },
 
-  /* MAIN CONTENT */
-  mainContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#374151',
-    marginBottom: 24,
-  },
-
-  /* ADJUSTMENT ROW */
-  adjustmentRow: {
+  // Live flow-rate pill — reflects real state, not decorative
+  flowPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    marginBottom: 12,
-    gap: 12,
+    alignSelf: 'center',
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primaryTint,
+    borderWidth: 1,
+    borderColor: colors.primaryTintBorder,
   },
-  circleButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#D1D5DB',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+    marginRight: spacing.sm,
+  },
+  flowPillText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: 0.5,
   },
 
-  /* PROGRESS TRACK */
-  progressTrackContainer: {
-    flex: 1,
-    paddingHorizontal: 8,
+  body: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing.xxl },
+
+  // Hero shell around the dial
+  hero: {
+    width: HERO,
+    height: HERO,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.xl,
   },
-  progressTrack: {
-    height: 38,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 20,
+  glow: {
+    position: 'absolute',
+    width: 236,
+    height: 236,
+    top: center(236),
+    left: center(236),
+    borderRadius: 118,
+    backgroundColor: colors.primaryTint,
+  },
+  ringStatic: {
+    position: 'absolute',
+    width: 222,
+    height: 222,
+    top: center(222),
+    left: center(222),
+    borderRadius: 111,
+    borderWidth: 1,
+    borderColor: colors.primarySubtle,
+  },
+  ringArc: {
+    position: 'absolute',
+    width: 222,
+    height: 222,
+    top: center(222),
+    left: center(222),
+    borderRadius: 111,
+    borderWidth: 6,
+    borderColor: colors.primaryTintBorder,
+  },
+  valueCard: {
+    width: DIAL,
+    height: DIAL,
+    borderRadius: DIAL / 2,
+    backgroundColor: colors.surface,
     borderWidth: 2,
-    borderColor: '#D1D5DB',
-    overflow: 'hidden',
-    justifyContent: 'center',
-    padding: 3,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#10B981', // Gradient-style fill color
-    borderRadius: 16,
-  },
-
-  /* PERCENTAGE LABEL */
-  percentageText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#374151',
-    marginBottom: 32,
-  },
-
-  /* PRESS SET BUTTON */
-  setButton: {
-    backgroundColor: '#10B981',
-    paddingVertical: 14,
-    paddingHorizontal: 40,
-    borderRadius: 12,
+    borderColor: colors.primaryTintBorder,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+    ...shadows.card,
   },
-  setButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: 1.5,
-  },
+  valueLabel: { fontSize: 44, fontWeight: '800', color: colors.primary, letterSpacing: 1 },
+  valueSub: { ...typography.subtitle, color: colors.textSecondary, marginTop: 4 },
+
+  stepperRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.huge, gap: spacing.md },
+  segments: { flex: 1, flexDirection: 'row', gap: 6, alignItems: 'center' },
+  segment: { flex: 1, height: 12, borderRadius: 6, backgroundColor: colors.primarySubtle },
+  segmentActive: { backgroundColor: colors.primary },
+  scaleLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.md, paddingHorizontal: 40 },
+  scaleText: { ...typography.caption, color: colors.textMuted },
 });

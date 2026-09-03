@@ -11,10 +11,11 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 
 import IP_CONFIG from '../services/ip.json';
+import { PrimaryButton } from './ui';
+import { colors, spacing, radii, typography, shadows } from './theme';
 
 const API_BASE_URL = IP_CONFIG.BASE_URL;
 
@@ -146,7 +147,7 @@ const VerifyOtpScreen = ({ route, navigation }) => {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
 
         <View style={styles.mainContainer}>
           {/* TOP SECTION WITH LOGO */}
@@ -162,11 +163,7 @@ const VerifyOtpScreen = ({ route, navigation }) => {
 
           {/* BOTTOM PURPLE SECTION */}
           <View style={styles.bottomSection}>
-            <TouchableOpacity
-              onPress={handleResendOtp}
-              activeOpacity={0.7}
-              disabled={resending}
-            >
+            <TouchableOpacity onPress={handleResendOtp} activeOpacity={0.7} disabled={resending}>
               <Text style={styles.resendText}>
                 Didn't receive the OTP?{' '}
                 <Text style={styles.resendBoldText}>
@@ -191,7 +188,7 @@ const VerifyOtpScreen = ({ route, navigation }) => {
                 <TextInput
                   key={index}
                   ref={inputRefs[index]}
-                  style={styles.otpInput}
+                  style={[styles.otpInput, digit ? styles.otpInputFilled : null]}
                   value={digit}
                   onChangeText={(val) => handleOtpChange(val, index)}
                   onKeyPress={(e) => handleKeyPress(e, index)}
@@ -200,23 +197,18 @@ const VerifyOtpScreen = ({ route, navigation }) => {
                   selectTextOnFocus
                   textAlign="center"
                   editable={!loading}
+                  placeholderTextColor={colors.textMuted}
                 />
               ))}
             </View>
 
             {/* VERIFY OTP BUTTON */}
-            <TouchableOpacity
-              style={[styles.verifyButton, loading && styles.disabledButton]}
+            <PrimaryButton
+              title="Verify OTP"
               onPress={handleVerifyOtp}
-              activeOpacity={0.85}
+              loading={loading}
               disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.verifyButtonText}>Verify OTP</Text>
-              )}
-            </TouchableOpacity>
+            />
           </View>
         </View>
       </SafeAreaView>
@@ -229,7 +221,7 @@ export default VerifyOtpScreen;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   mainContainer: {
     flex: 1,
@@ -239,7 +231,7 @@ const styles = StyleSheet.create({
   /* TOP HALF (WHITE BACKGROUND) */
   topSection: {
     height: '42%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     paddingBottom: 40,
@@ -255,26 +247,26 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 
-  /* BOTTOM HALF (PURPLE BACKGROUND) */
+  /* BOTTOM HALF (BRAND PURPLE BACKGROUND) */
   bottomSection: {
     height: '58%',
-    backgroundColor: '#492971',
+    backgroundColor: colors.primary,
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 130,
-    paddingBottom: 24,
+    paddingBottom: spacing.xxl,
   },
   resendText: {
-    color: '#E0D6EC',
+    color: 'rgba(255,255,255,0.8)',
     fontSize: 14,
     fontWeight: '500',
   },
   resendBoldText: {
-    color: '#FFFFFF',
+    color: colors.textOnPrimary,
     fontWeight: '700',
   },
   footerBrandText: {
-    color: '#D8CEE6',
+    color: 'rgba(255,255,255,0.7)',
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.5,
@@ -286,63 +278,51 @@ const styles = StyleSheet.create({
     top: '30%',
     left: '6%',
     right: '6%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingVertical: 28,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 10,
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    paddingVertical: spacing.xxl,
+    paddingHorizontal: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
   cardTitle: {
     fontSize: 22,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 8,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+    letterSpacing: 0.2,
   },
   cardSubtitle: {
+    ...typography.body,
     fontSize: 13,
-    color: '#7C7C7C',
+    color: colors.textSecondary,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
+    lineHeight: 18,
   },
 
-  /* OTP BOXES - Adjusted width/height for 6 boxes */
+  /* OTP BOXES */
   otpRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
   },
   otpInput: {
     width: 44,
-    height: 48,
-    borderRadius: 8,
-    backgroundColor: '#F1F3F6',
+    height: 52,
+    borderRadius: radii.md,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
     fontSize: 18,
-    fontWeight: '700',
-    color: '#1A1A1A',
+    fontWeight: '800',
+    color: colors.textPrimary,
   },
-
-  /* VERIFY BUTTON */
-  verifyButton: {
-    width: '100%',
-    height: 50,
-    backgroundColor: '#492971',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  disabledButton: {
-    opacity: 0.7,
-  },
-  verifyButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+  otpInputFilled: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryTint,
   },
 });
