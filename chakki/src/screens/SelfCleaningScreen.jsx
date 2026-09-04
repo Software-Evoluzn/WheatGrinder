@@ -138,7 +138,7 @@ const CleaningHero = () => {
 const SelfCleaningScreen = ({ navigation }) => {
   const handleNext = () => {
     if (navigation?.navigate) {
-      navigation.navigate('ResumeGrinding');
+      navigation.navigate('CleaningProcessScreen');
     }
   };
 

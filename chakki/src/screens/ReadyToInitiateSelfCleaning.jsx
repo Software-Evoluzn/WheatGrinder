@@ -129,7 +129,7 @@ const ReadyHero = () => {
 const ReadyToInitiateSelfCleaning = ({ navigation }) => {
   const handleReady = () => {
     if (navigation?.navigate) {
-      navigation.navigate('ConnectWifiScreen');
+      navigation.navigate('SelfCleaning');
     }
   };
 

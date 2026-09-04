@@ -13,6 +13,9 @@ import {
 } from './ui';
 import { colors, spacing, radii, typography, shadows, layout } from './theme';
 
+
+//  onPress={() => navigation.navigate('GrainConfirmationScreen', { grainId: selectedGrain })}
+
 /* Static overflow (kebab) menu — no API / no dynamic data. */
 const HeaderMenu = () => {
   const [open, setOpen] = useState(false);
@@ -65,7 +68,8 @@ const HeaderMenu = () => {
   );
 };
 
-const UserChoiceScreen = ({ navigation }) => {
+const UserChoiceScreen = ({ navigation , route }) => {
+  const {grain } = route?.params || {};
   const [selectedOption, setSelectedOption] = useState(null); // 'flowRate' | 'texture' | null
 
   const handleBack = () => {
@@ -78,9 +82,11 @@ const UserChoiceScreen = ({ navigation }) => {
   const handleSet = () => {
     if (selectedOption === 'flowRate') {
       navigation.navigate('SetFlowRate');
-    } else if (selectedOption === 'texture') {
-      navigation.navigate('SetGrindTexture');
-    } else {
+    } 
+    else if (selectedOption === 'texture') {
+      navigation.navigate('GrainConfirmationScreen', { grainName: grain });
+    } 
+    else {
       Alert.alert('Selection Required', 'Please select Flow Rate or Texture first.');
     }
   };

@@ -75,7 +75,7 @@ const HomeScreen = ({ navigation }) => {
                             <PrimaryButton
                                 title="START"
                                 icon="arrow-right"
-                                onPress={() => navigation.navigate('SelfCleaning')}
+                                onPress={() => navigation.navigate('CollectionCloth')}
                                 style={{ marginTop: spacing.xl }}
                             />
                         </View>

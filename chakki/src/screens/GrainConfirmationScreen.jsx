@@ -6,23 +6,23 @@ import { colors, spacing, radii, shadows, typography } from './theme';
 
 const GrainConfirmationScreen = ({ navigation, route }) => {
   // --- functionality preserved exactly ---
-  const selectedGrain = route?.params?.grainName || 'WHEAT';
-  const selectedTexture = route?.params?.texture || 'MEDIUM';
+  const grainName = route?.params?.grainName || 'WHEAT';
+  const texture = route?.params?.texture || 'MEDIUM';
 
   const [selectedOption, setSelectedOption] = useState(null);
 
   const handleBack = () => {
-    if (navigation?.goBack) navigation.goBack();
+    if (navigation?.goBack) navigation.navigate('SelectGrain');
   };
 
   const handleStartProcess = () => {
     setSelectedOption('start');
-    navigation.navigate('MillingControlScreen', { grain: selectedGrain, texture: selectedTexture });
+    navigation.navigate('MillingControlScreen', { grain: grainName, texture: texture });
   };
 
   const handleSetTexture = () => {
     setSelectedOption('texture');
-    navigation.navigate('UserChoiceScreen', { grain: selectedGrain });
+    navigation.navigate('SetGrindTexture' , {grain: grainName});
   };
 
   return (
@@ -33,7 +33,7 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
           since it's a second piece of dynamic data, not a static eyebrow. */}
       <MainHeader
         greeting="My Kitchen Tools"
-        title={selectedGrain.toUpperCase()}
+        title={grainName.toUpperCase()}
         onBack={handleBack}
       />
 
@@ -49,7 +49,7 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
 
         <View style={styles.texturePill}>
           <View style={styles.dot} />
-          <Text style={styles.textureText}>Texture · {selectedTexture.toUpperCase()}</Text>
+          <Text style={styles.textureText}>Texture · {texture.toUpperCase()}</Text>
         </View>
 
         <Text style={styles.question}>What would you like to do?</Text>

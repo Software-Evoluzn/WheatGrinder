@@ -139,7 +139,7 @@ const SelectGrainScreen = ({ navigation }) => {
             icon="arrow-right"
             fullWidth={false}
             style={{ flex: 1 }}
-            onPress={() => navigation.navigate('GrainConfirmationScreen', { grainId: selectedGrain })}
+            onPress={() => navigation.navigate('UserChoiceScreen', { grain: selectedGrain })}
           />
         </View>
       </BottomActionBar>
