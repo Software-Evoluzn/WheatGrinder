@@ -65,21 +65,34 @@ const HeaderMenu = () => {
   );
 };
 
+// GRAINS array mapped with calibration data from table
 const GRAINS = [
-  { id: 'wheat', label: 'WHEAT', image: require('../assets/images/wheat.png') },
-  { id: 'chana_dal', label: 'CHANA DAL', image: require('../assets/images/chana_dal.png') },
-  { id: 'rice', label: 'RICE', image: require('../assets/images/rice.png') },
-  { id: 'ragi', label: 'RAGI', image: require('../assets/images/ragi.png') },
-  { id: 'fada', label: 'SPLITS (FADA)', image: require('../assets/images/splits.png') },
-  { id: 'jowar', label: 'JOWAR', image: require('../assets/images/jowar.png') },
-  { id: 'bajra', label: 'BAJRA', image: require('../assets/images/bajra.png') },
-  { id: 'masala', label: 'MASALA', image: require('../assets/images/masala.png') },
-  { id: 'others', label: 'OTHERS', isOthers: true },
+  { id: 'wheat', label: 'WHEAT', image: require('../assets/images/wheat.png'), defaultTexture: 5, maxLimit: 0 },
+  { id: 'chana_dal', label: 'CHANA DAL', image: require('../assets/images/chana_dal.png'), defaultTexture: 15, maxLimit: 10 },
+  { id: 'rice', label: 'RICE', image: require('../assets/images/rice.png'), defaultTexture: 10, maxLimit: 2 },
+  { id: 'ragi', label: 'RAGI', image: require('../assets/images/ragi.png'), defaultTexture: 5, maxLimit: 0 },
+  { id: 'fada', label: 'SPLITS (FADA)', image: require('../assets/images/splits.png'), defaultTexture: 20, maxLimit: 10 },
+  { id: 'jowar', label: 'JOWAR', image: require('../assets/images/jowar.png'), defaultTexture: 5, maxLimit: 0 },
+  { id: 'bajra', label: 'BAJRA', image: require('../assets/images/bajra.png'), defaultTexture: 5, maxLimit: 0 },
+  { id: 'masala', label: 'MASALA', image: require('../assets/images/masala.png'), defaultTexture: 10, maxLimit: 2 },
+  { id: 'others', label: 'OTHERS', isOthers: true, defaultTexture: 8, maxLimit: 0 },
 ];
 
 const SelectGrainScreen = ({ navigation }) => {
   // --- functionality preserved exactly ---
-  const [selectedGrain, setSelectedGrain] = useState('ragi');
+  const [selectedGrain, setSelectedGrain] = useState('wheat');
+
+
+  const selectGrainData = GRAINS.find((g) => g.id === selectedGrain) || GRAINS[0];
+
+  const handleNext = () =>{
+    navigation.navigate('GrainConfirmationScreen' , {
+       grainId: selectGrainData.id,
+       grainName: selectGrainData.label,
+       defaultTexture: selectGrainData.defaultTexture,
+       maxLimit: selectGrainData.maxLimit,
+    });
+  };
 
   return (
     <Screen background={colors.background}>
@@ -133,13 +146,17 @@ const SelectGrainScreen = ({ navigation }) => {
       <BottomActionBar>
         <View style={styles.actions}>
           {/* CLEAN STONE preserved with no handler, exactly as original */}
-          <SecondaryButton title="CLEAN STONE" fullWidth={false} style={{ flex: 1 }} onPress={undefined} />
+          <SecondaryButton 
+          title="CLEAN STONE" 
+          fullWidth={false} 
+          style={{ flex: 1 }} 
+          onPress={() => navigation.navigate('CleaningProcessScreen')} />
           <PrimaryButton
             title="NEXT"
             icon="arrow-right"
             fullWidth={false}
             style={{ flex: 1 }}
-            onPress={() => navigation.navigate('UserChoiceScreen', { grain: selectedGrain })}
+            onPress={handleNext}
           />
         </View>
       </BottomActionBar>

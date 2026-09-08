@@ -121,7 +121,7 @@ const CleanStoneChoiceScreen = ({ navigation }) => {
   };
 
   const handleNo = () => {
-    if (navigation?.navigate) navigation.navigate('SelectGrain');
+    if (navigation?.navigate) navigation.navigate('GrainConfirmationScreen');
   };
 
   return (

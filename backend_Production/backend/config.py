@@ -1,0 +1,13 @@
+import os
+
+class Config:
+    GMAIL_USER = os.getenv("GMAIL_USER" , "evoluzn999@gmail.com")
+    GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD","euhf nozx wsjy pwbr")
+    
+    DB_CONFIG = {
+        "host" : os.getenv("DB_HOST" , "evoluzn.org"),
+        "user": os.getenv("DB_USER" , "shilpa"),
+        "password":os.getenv("DB_PASSWORD","Evoluzn@123"),
+        "database": os.getenv("DB_NAME" , "wheat_grinder")
+    }
+    

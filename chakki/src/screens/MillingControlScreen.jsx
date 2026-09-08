@@ -49,7 +49,7 @@ const HeaderMenu = () => {
         onClose={() => setHelpOpen(false)}
         icon="help-circle"
         title="Help"
-        message="Tap START to load the grain and begin milling. Tap PAUSE to hold the process. Use the back arrow to return."
+        message="Tap START to load the grain and begin milling. Tap PAUSE to hold the process. Tap the Texture Chip to modify texture."
         confirmLabel="Got it"
         onConfirm={() => setHelpOpen(false)}
       />
@@ -58,9 +58,11 @@ const HeaderMenu = () => {
 };
 
 const MillingControlScreen = ({ navigation, route }) => {
-  // --- functionality preserved exactly ---
+  const grainId = route?.params?.grainId || 'wheat';
   const selectedGrain = route?.params?.grainName || 'WHEAT';
   const selectedTexture = route?.params?.texture || 'FINE';
+  const textureValue = route?.params?.textureValue ?? 5;
+  const maxLimit = route?.params?.maxLimit ?? 0;
 
   const [processState, setProcessState] = useState(null); // null | 'START' | 'PAUSE'
 
@@ -74,12 +76,23 @@ const MillingControlScreen = ({ navigation, route }) => {
       navigation.navigate('LoadGrainToStart', {
         grainName: selectedGrain,
         texture: selectedTexture,
+        textureValue,
       });
     }, 200);
   };
 
   const handleTogglePause = () => {
     setProcessState((prev) => (prev === 'PAUSE' ? null : 'PAUSE'));
+  };
+
+  // Direct Texture Level change Handler
+  const handleChangeTexture = () => {
+    navigation.navigate('SetGrindTexture', {
+      grainId,
+      grainName: selectedGrain,
+      defaultTexture: textureValue,
+      maxLimit,
+    });
   };
 
   const Control = ({ active, icon, label, onPress, iconNudge = 0 }) => (
@@ -100,7 +113,6 @@ const MillingControlScreen = ({ navigation, route }) => {
 
   return (
     <Screen background={colors.background}>
-      {/* Header matches the flow screens: back + greeting/title + static menu. */}
       <MainHeader
         greeting="Machine Control"
         title="Milling"
@@ -118,14 +130,30 @@ const MillingControlScreen = ({ navigation, route }) => {
 
         {/* Selected configuration (from route params) */}
         <View style={styles.configRow}>
+          {/* Grain Chip */}
           <View style={styles.configChip}>
             <Feather name="box" size={14} color={colors.primary} style={{ marginRight: spacing.sm }} />
             <Text style={styles.configText}>{selectedGrain.toUpperCase()}</Text>
           </View>
-          <View style={styles.configChip}>
-            <Feather name="sliders" size={14} color={colors.primary} style={{ marginRight: spacing.sm }} />
+
+          {/* Interactive Texture & Highlighted Level Chip */}
+          <Pressable
+            style={({ pressed }) => [styles.configChip, styles.editableTextureChip, pressed && { opacity: 0.8 }]}
+            onPress={handleChangeTexture}
+            accessibilityRole="button"
+            accessibilityLabel="Change texture level"
+          >
+            <Feather name="sliders" size={14} color={colors.primary} style={{ marginRight: spacing.xs }} />
             <Text style={styles.configText}>{selectedTexture.toUpperCase()}</Text>
-          </View>
+            
+            {/* Highlight Badge for Level */}
+            <View style={styles.levelBadge}>
+              <Text style={styles.levelLabelText}>LVL</Text>
+              <Text style={styles.levelValueText}>{textureValue}</Text>
+            </View>
+
+            <Feather name="edit-2" size={18} color={colors.primary} style={{ marginLeft: spacing.xs }} />
+          </Pressable>
         </View>
 
         <Text style={styles.prompt}>Choose an action to control milling</Text>
@@ -173,7 +201,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.primaryTintBorder,
   },
+  editableTextureChip: {
+    paddingRight: spacing.sm,
+  },
   configText: { fontSize: 13, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 },
+
+  // Highlighted Level Badge inside texture chip
+  levelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
+    marginHorizontal: spacing.xs,
+    gap: 2,
+  },
+  levelLabelText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.primarySubtle,
+  },
+  levelValueText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: colors.surface,
+  },
 
   prompt: { ...typography.subtitle, color: colors.textSecondary, marginBottom: spacing.huge, textAlign: 'center' },
   controlsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 44 },

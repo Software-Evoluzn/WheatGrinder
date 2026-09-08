@@ -16,7 +16,7 @@ import { colors, spacing, typography, radii, shadows, layout } from './theme';
 const PROGRESS_STEP = 10;        // % added per tick
 const PROGRESS_INTERVAL_MS = 450; // how often progress advances
 const DONE_HOLD_MS = 2500;        // how long the "DONE" message shows before advancing
-const NEXT_ROUTE = 'CleanStoneChoiceScreen';
+const NEXT_ROUTE = 'SelectGrain';
 
 /* -------------------------------------------------------------------------- */
 /*  HeaderMenu — static overflow (kebab) menu. No API / no dynamic data.       */

@@ -80,30 +80,38 @@ const HeaderMenu = () => {
 
 const SetGrindTexture = ({ navigation, route }) => {
   // --- functionality preserved exactly ---
-  const selectedGrain = route?.params?.grainName || 'WHEAT';
-  const [textureLevel, setTextureLevel] = useState(50); // 0..100
+  const grainId = route?.params?.grainId || 'wheat';
+  const grainName = route?.params?.grainName || 'WHEAT';
+  const defaultTexture = route?.params?.defaultTexture ?? 5;
+  const maxLimit = route?.params?.maxLimit ?? 0;
+
+
+
+  // Initialize level from defaultTexture prop
+  const [textureLevel, setTextureLevel] = useState(defaultTexture);
 
   const getTextureLabel = () => {
-    if (textureLevel <= 30) return 'FINE';
-    if (textureLevel <= 70) return 'MEDIUM';
+    if (textureLevel <= 6) return 'FINE';
+    if (textureLevel <= 14) return 'MEDIUM';
     return 'COARSE';
   };
 
   const handleBack = () => {
     if (navigation?.goBack) navigation.goBack();
   };
-  const handleDecrease = () => setTextureLevel((prev) => Math.max(0, prev - 10));
-  const handleIncrease = () => setTextureLevel((prev) => Math.min(100, prev + 10));
+  const handleDecrease = () => setTextureLevel((prev) => Math.max(0, prev - 1));
+  const handleIncrease = () => setTextureLevel((prev) => Math.min(20, prev + 1));
   const handleSet = () => {
-    navigation.navigate('MillingControlScreen', {
-      grainName: selectedGrain,
+   navigation.navigate('GrainConfirmationScreen', {
+      grainId,
+      grainName,
+      defaultTexture: textureLevel, // Updated value
       texture: getTextureLabel(),
-      textureValue: textureLevel,
+      maxLimit,
     });
   };
 
-  const segments = 10;
-  const active = Math.round(textureLevel / 10);
+  const MAX_LEVEL = 20;
 
   return (
     <Screen background={colors.background}>
@@ -113,7 +121,7 @@ const SetGrindTexture = ({ navigation, route }) => {
           subtitle slot, matching the pattern used on GrainConfirmationScreen. */}
       <MainHeader
         greeting="My Kitchen Tools"
-        title={selectedGrain.toUpperCase()}
+        title={grainName.toUpperCase()}
         onBack={handleBack}
         right={<HeaderMenu />}
       />
@@ -134,24 +142,24 @@ const SetGrindTexture = ({ navigation, route }) => {
           <View style={styles.ringArc} />
           <View style={styles.valueCard}>
             <Text style={styles.valueLabel}>{getTextureLabel()}</Text>
-            <Text style={styles.valueSub}>{textureLevel}%</Text>
+            <Text style={styles.valueSub}>{textureLevel}</Text>
           </View>
         </View>
 
         <View style={styles.stepperRow}>
           <IconButton name="minus" onPress={handleDecrease} variant="ghost" size={24} accessibilityLabel="Decrease texture" />
           <View style={styles.segments}>
-            {Array.from({ length: segments }).map((_, i) => (
-              <View key={i} style={[styles.segment, i < active && styles.segmentActive]} />
+            {Array.from({ length: MAX_LEVEL }).map((_, i) => (
+              <View key={i} style={[styles.segment, i < textureLevel && styles.segmentActive]} />
             ))}
           </View>
           <IconButton name="plus" onPress={handleIncrease} variant="ghost" size={24} accessibilityLabel="Increase texture" />
         </View>
 
         <View style={styles.scaleLabels}>
-          <Text style={styles.scaleText}>FINE</Text>
-          <Text style={styles.scaleText}>MEDIUM</Text>
-          <Text style={styles.scaleText}>COARSE</Text>
+          <Text style={styles.scaleText}>FINE (0-6)</Text>
+          <Text style={styles.scaleText}>MEDIUM (7-14)</Text>
+          <Text style={styles.scaleText}>COARSE (15-20)</Text>
         </View>
       </View>
 

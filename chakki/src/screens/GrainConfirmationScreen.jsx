@@ -2,12 +2,23 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { Screen, MainHeader, SelectableCard, FootNote } from './ui';
-import { colors, spacing, radii, shadows, typography } from './theme';
+import { colors, spacing, radii, shadows } from './theme';
 
 const GrainConfirmationScreen = ({ navigation, route }) => {
-  // --- functionality preserved exactly ---
+  const grainId = route?.params?.grainId || 'wheat';
   const grainName = route?.params?.grainName || 'WHEAT';
-  const texture = route?.params?.texture || 'MEDIUM';
+  const defaultTexture = route?.params?.defaultTexture ?? 5;
+  const maxLimit = route?.params?.maxLimit ?? 0;
+
+  // Level ke hisab se label calculate karne ka function
+  const getTextureLabel = (val) => {
+    if (val <= 6) return 'FINE';
+    if (val <= 14) return 'MEDIUM';
+    return 'COARSE';
+  };
+
+  const textureLabel = route?.params?.texture || getTextureLabel(defaultTexture);
+  const textureLevel = defaultTexture;
 
   const [selectedOption, setSelectedOption] = useState(null);
 
@@ -17,20 +28,27 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
 
   const handleStartProcess = () => {
     setSelectedOption('start');
-    navigation.navigate('MillingControlScreen', { grain: grainName, texture: texture });
+    navigation.navigate('MillingControlScreen', {
+      grainId,
+      grainName,
+      texture: textureLabel,
+      textureValue: textureLevel,
+      maxLimit,
+    });
   };
 
   const handleSetTexture = () => {
     setSelectedOption('texture');
-    navigation.navigate('SetGrindTexture' , {grain: grainName});
+    navigation.navigate('SetGrindTexture', {
+      grainId,
+      grainName,
+      defaultTexture: textureLevel,
+      maxLimit,
+    });
   };
 
   return (
     <Screen background={colors.background}>
-      {/* Header: same MainHeader structure/spacing as the rest of the flow.
-          The dynamic grain name takes the title slot (short, like "Cleaning"
-          or "Collection Cloth"); texture moves into a pill in the body below
-          since it's a second piece of dynamic data, not a static eyebrow. */}
       <MainHeader
         greeting="My Kitchen Tools"
         title={grainName.toUpperCase()}
@@ -38,18 +56,27 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
       />
 
       <View style={styles.body}>
-        {/* Compact icon badge — no illustration asset exists for this step,
-            so a smaller ring/glow accent keeps the same visual language
-            without crowding the two selection cards below. */}
         <View style={styles.badgeOuter}>
           <View style={styles.badgeInner}>
             <Feather name="check-circle" size={40} color={colors.primary} />
           </View>
         </View>
 
+        {/* Highlighted Texture & Level Pill */}
         <View style={styles.texturePill}>
           <View style={styles.dot} />
-          <Text style={styles.textureText}>Texture · {texture.toUpperCase()}</Text>
+          <Text style={styles.textureText}>
+            TEXTURE · 
+          </Text>
+           {/* <Text style={styles.textureText}>
+            TEXTURE · <Text style={styles.textureModeText}>{textureLabel.toUpperCase()}</Text>
+          </Text> */}
+          
+          {/* Highlight Badge specifically for Level Value */}
+          <View style={styles.levelBadge}>
+            {/* <Text style={styles.levelLabelText}>LVL</Text> */}
+            <Text style={styles.levelValueText}>{textureLevel}</Text>
+          </View>
         </View>
 
         <Text style={styles.question}>What would you like to do?</Text>
@@ -79,8 +106,7 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
 
 export default GrainConfirmationScreen;
 
-const BADGE = 140;
-const badgeCenter = (size) => (BADGE - size) / 2;
+const BADGE = 130;
 
 const styles = StyleSheet.create({
   body: {
@@ -89,7 +115,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.xxl,
   },
-
   badgeOuter: {
     width: BADGE,
     height: BADGE,
@@ -109,14 +134,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.card,
   },
-
+  
+  // Highlight Pill Styles
   texturePill: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
     marginTop: spacing.xl,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.xs,
+    paddingVertical: spacing.xs,
     borderRadius: radii.pill,
     backgroundColor: colors.primaryTint,
     borderWidth: 1,
@@ -130,10 +157,37 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   textureText: {
-    fontSize: 13,
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    letterSpacing: 0.5,
+    marginRight: spacing.md,
+  },
+  textureModeText: {
     fontWeight: '800',
     color: colors.primary,
+  },
+  
+  // Specially highlighted level chip
+  levelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
+    gap: 4,
+  },
+  levelLabelText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.primarySubtle,
     letterSpacing: 0.5,
+  },
+  levelValueText: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: colors.surface,
   },
 
   question: {
@@ -144,7 +198,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxxl,
     letterSpacing: 0.2,
   },
-
   cardsRow: {
     flexDirection: 'row',
     gap: spacing.lg,
@@ -152,7 +205,6 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     justifyContent: 'center',
   },
-
   footer: {
     alignItems: 'center',
     paddingBottom: spacing.xxl,
