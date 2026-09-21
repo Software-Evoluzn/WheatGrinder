@@ -25,12 +25,12 @@ const LoginScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!email.trim()) {
+    if(!email.trim()) {
       Alert.alert('Error', 'Please enter email');
       return;
     }
 
-    if (!password.trim()) {
+    if(!password.trim()) {
       Alert.alert('Error', 'Please enter password');
       return;
     }
@@ -66,7 +66,9 @@ const LoginScreen = ({ navigation }) => {
 
             onPress: () => {
 
-              navigation.replace('Main');
+              navigation.replace('Main' , {
+                customer_id: data.customer_id
+              });
 
             },
           },

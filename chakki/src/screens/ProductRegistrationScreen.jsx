@@ -16,6 +16,10 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Camera } from 'react-native-camera-kit';
 import Feather from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import IP_CONFIG from '../services/ip.json'
+
+
+const base_url = IP_CONFIG.BASE_URL;
 
 const parseQR = (raw) => {
   if (!raw) return null;
@@ -139,7 +143,7 @@ const ProductRegistrationScreen = ({ navigation }) => {
     }
 
     try {
-      const response = await fetch('http://192.168.1.27:5001/register-product', {
+      const response = await fetch(`${base_url}/register-product`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

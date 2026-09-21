@@ -90,13 +90,15 @@ function BrandTabBar({ state, descriptors, navigation }) {
   );
 }
 
-export default function BottomNavigator() {
+export default function BottomNavigator({route}) {
+
+  const customerId = route?.params?.customer_id;
   return (
     <Tab.Navigator
       tabBar={(props) => <BrandTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Home" component={HomeScreen} initialParams={{customer_id : customerId}} />
       <Tab.Screen name="ProductRegister" component={ProductRegistrationScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>

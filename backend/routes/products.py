@@ -46,6 +46,42 @@ def register_product():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+    
+    
+    
+@products_bp.route('/customer-products/<int:customer_id>', methods=['GET'])
+def get_customer_products(customer_id):
+    try:
+        cur = get_cursor()
+        cur.execute("""
+            SELECT 
+                id,
+                customer_id,
+                product_name,
+                serial_number,
+                COALESCE(model_number, 'N/A') AS model_number,
+                COALESCE(mac_id, 'N/A') AS mac_id,
+                purchase_date,
+                warranty_expiry
+            FROM product_registrations
+            WHERE customer_id = %s
+            ORDER BY id DESC
+        """, (customer_id,))
+
+        devices = cur.fetchall()
+        today = date.today()
+
+        for dev in devices:
+            dev["purchase_date"] = str(dev["purchase_date"])
+            dev["warranty_expiry"] = str(dev["warranty_expiry"])
+            expiry = date.fromisoformat(dev["warranty_expiry"])
+            dev["is_active"] = expiry >= today
+
+        return jsonify({"status": "success", "devices": devices}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @products_bp.route('/warranty/<serial_number>', methods=['GET'])
