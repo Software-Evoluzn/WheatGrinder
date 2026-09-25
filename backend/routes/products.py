@@ -4,32 +4,40 @@ from database import get_cursor, get_db
 
 products_bp = Blueprint('products', __name__)
 
+
+# ---------------------------------------------------------------
+# REGISTER PRODUCT
+# ---------------------------------------------------------------
 @products_bp.route('/register-product', methods=['POST'])
 def register_product():
     try:
-        data = request.get_json()
-        customer_id = data.get("customer_id")
-        product_name = data.get("product_name")
-        serial_number = data.get("serial_number")
-        model_number = data.get("model_number")
-        mac_id = data.get("mac_id")
+        data = request.get_json(silent=True) or {}
+        customer_id   = data.get("customer_id")
+        product_name  = (data.get("product_name") or "").strip()
+        serial_number = (data.get("serial_number") or "").strip()
+        model_number  = (data.get("model_number") or "").strip()
+        mac_id        = (data.get("mac_id") or "").strip()
         purchase_date = data.get("purchase_date")
 
         if not customer_id or not serial_number or not purchase_date:
             return jsonify({"error": "Missing required fields."}), 400
 
         cur = get_cursor()
-        cur.execute("SELECT id FROM product_registrations WHERE serial_number = %s LIMIT 1", (serial_number,))
+        cur.execute(
+            "SELECT id FROM product_registrations WHERE serial_number = %s LIMIT 1",
+            (serial_number,)
+        )
         if cur.fetchone():
             return jsonify({"error": "Device already registered.", "serial_number": serial_number}), 409
 
         purchase_date_obj = datetime.strptime(purchase_date, "%Y-%m-%d")
-        warranty_years = 1  
-        warranty_expiry = purchase_date_obj + timedelta(days=365 * warranty_years)
+        warranty_years    = 1
+        warranty_expiry   = purchase_date_obj + timedelta(days=365 * warranty_years)
 
         cur.execute("""
             INSERT INTO product_registrations
-            (customer_id, product_name, serial_number, model_number, mac_id, purchase_date, warranty_years, warranty_expiry, is_registered)
+            (customer_id, product_name, serial_number, model_number, mac_id,
+             purchase_date, warranty_years, warranty_expiry, is_registered)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             customer_id, product_name, serial_number, model_number, mac_id,
@@ -45,17 +53,46 @@ def register_product():
         }), 200
 
     except Exception as e:
+        print(f"[REGISTER] ERROR: {e}")
         return jsonify({"error": str(e)}), 500
-    
-    
-    
-    
+
+
+# ---------------------------------------------------------------
+# GET LATEST REGISTERED SERIAL NUMBER FOR A CUSTOMER
+# (used by the app before sending MQTT commands)
+# ---------------------------------------------------------------
+@products_bp.route('/api/products/get-serial', methods=['GET'])
+def get_serial():
+    customer_id = request.args.get('customer_id')
+    if not customer_id:
+        return jsonify({"success": False, "error": "customer_id is required"}), 400
+
+    try:
+        cur = get_cursor()
+        cur.execute("""
+            SELECT serial_number FROM product_registrations
+            WHERE customer_id = %s
+            ORDER BY id DESC LIMIT 1
+        """, (customer_id,))
+        row = cur.fetchone()
+    except Exception as e:
+        print(f"[GET-SERIAL] ERROR: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+    if not row:
+        return jsonify({"success": False, "error": "No registered product for this customer"}), 404
+    return jsonify({"success": True, "serial_number": row["serial_number"]}), 200
+
+
+# ---------------------------------------------------------------
+# LIST ALL PRODUCTS OF A CUSTOMER
+# ---------------------------------------------------------------
 @products_bp.route('/customer-products/<int:customer_id>', methods=['GET'])
 def get_customer_products(customer_id):
     try:
         cur = get_cursor()
         cur.execute("""
-            SELECT 
+            SELECT
                 id,
                 customer_id,
                 product_name,
@@ -63,7 +100,9 @@ def get_customer_products(customer_id):
                 COALESCE(model_number, 'N/A') AS model_number,
                 COALESCE(mac_id, 'N/A') AS mac_id,
                 purchase_date,
-                warranty_expiry
+                warranty_expiry,
+                is_online,
+                last_seen
             FROM product_registrations
             WHERE customer_id = %s
             ORDER BY id DESC
@@ -73,49 +112,19 @@ def get_customer_products(customer_id):
         today = date.today()
 
         for dev in devices:
-            dev["purchase_date"] = str(dev["purchase_date"])
+            dev["purchase_date"]   = str(dev["purchase_date"])
             dev["warranty_expiry"] = str(dev["warranty_expiry"])
-            expiry = date.fromisoformat(dev["warranty_expiry"])
-            dev["is_active"] = expiry >= today
+            dev["is_active"] = date.fromisoformat(dev["warranty_expiry"]) >= today
+            dev["status"] = "online" if dev.get("is_online") else "offline"
+            
+            
+            if dev.get("last_seen"):
+                dev["last_seen"] = str(dev["last_seen"])
+            else:
+                dev["last_seen"] = None
 
         return jsonify({"status": "success", "devices": devices}), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@products_bp.route('/warranty/<serial_number>', methods=['GET'])
-def check_warranty(serial_number):
-    try:
-        cur = get_cursor()
-        cur.execute("""
-            SELECT
-                pr.product_name,
-                pr.serial_number,
-                COALESCE(pr.model_number, 'N/A') AS model_number,
-                COALESCE(pr.mac_id, 'N/A') AS mac_id,
-                c.name AS customer_name,
-                c.mobile AS customer_mobile,
-                pr.purchase_date,
-                pr.warranty_expiry
-            FROM product_registrations pr
-            LEFT JOIN customers c ON pr.customer_id = c.customer_id
-            WHERE pr.serial_number = %s
-            ORDER BY pr.id DESC LIMIT 1
-        """, (serial_number,))
-
-        result = cur.fetchone()
-        if not result:
-            return jsonify({"status": "error", "message": "No warranty found for this serial number"}), 404
-
-        result["purchase_date"] = str(result["purchase_date"])
-        result["warranty_expiry"] = str(result["warranty_expiry"])
-        
-        today = date.today()
-        expiry = date.fromisoformat(result["warranty_expiry"])
-        result["status"] = "active" if expiry >= today else "expired"
-
-        return jsonify(result), 200
-
-    except Exception as e:
+        print(f"[CUSTOMER-PRODUCTS] ERROR: {e}")
         return jsonify({"error": str(e)}), 500

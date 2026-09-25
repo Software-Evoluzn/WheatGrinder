@@ -27,6 +27,8 @@ def init_schema():
         warranty_years  INT DEFAULT 1,
         warranty_expiry DATE,
         is_registered   BOOLEAN DEFAULT TRUE,
+        is_online       BOOLEAN DEFAULT FALSE,
+        last_seen       TIMESTAMP NULL DEFAULT NULL,
         created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
