@@ -7,64 +7,115 @@ import {
     FlatList,
     Image,
     ActivityIndicator,
-    TouchableOpacity,
-    RefreshControl
+    RefreshControl,
+    Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { io } from 'socket.io-client';
 import { useAppTheme } from '../services/theme';
 import { colors, spacing, radii, typography, shadows, layout } from './theme';
 import { MainHeader, Eyebrow, StatusBadge, PrimaryButton } from './ui';
 import IP_CONFIG from '../services/ip.json';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = IP_CONFIG.BASE_URL; // Apne backend ka IP add karein
+const API_BASE_URL = IP_CONFIG.BASE_URL;
+const POLL_INTERVAL_MS = 10000; // har 10 sec silent refresh
 
 const HomeScreen = ({ navigation, route }) => {
     const { isDark } = useAppTheme();
-    
-    // Default/Logged-in Customer ID (Pass via auth or route params)
-   
 
     const [devices, setDevices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
-    const fetchUserDevices = async () => {
+    // silent = true -> loader nahi dikhega (background refresh)
+    const fetchUserDevices = async (silent = false) => {
         try {
-            setLoading(true);
+            if (!silent) setLoading(true);
+
             let customerId = route?.params?.customer_id;
-
-            if(!customerId){
-                customerId = await AsyncStorage.getItem('customer_id')
+            if (!customerId) {
+                customerId = await AsyncStorage.getItem('customer_id');
             }
+            if (!customerId) return;
 
-
-           console.log("Fetching fr customer id:" , customerId)
             const response = await fetch(`${API_BASE_URL}/customer-products/${customerId}`);
             const data = await response.json();
-            console.log(data)
+
             if (response.ok) {
                 setDevices(data.devices || []);
             }
         } catch (error) {
-            console.error("Error fetching devices:", error);
+            console.error('Error fetching devices:', error);
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
     };
 
+    // 1) Pehli baar load
     useEffect(() => {
         fetchUserDevices();
     }, []);
 
+    // 2) Socket: live status + reconnect par refresh
+    useEffect(() => {
+        const socket = io(API_BASE_URL, {
+            transports: ['websocket'],
+            reconnection: true,
+            reconnectionDelay: 1000,
+        });
+
+        socket.on('connect', () => fetchUserDevices(true));
+
+        socket.on('device_status_update', ({ serial_number, status }) => {
+            setDevices((prev) =>
+                prev.map((d) =>
+                    d.serial_number === serial_number ? { ...d, status } : d
+                )
+            );
+        });
+
+        return () => {
+            socket.disconnect();
+        };
+    }, []);
+
+    // 3) Polling backup: har 10 sec silently refresh
+    useEffect(() => {
+        const timer = setInterval(() => fetchUserDevices(true), POLL_INTERVAL_MS);
+        return () => clearInterval(timer);
+    }, []);
+
+    // 4) Screen par wapas aane par refresh
+    useEffect(() => {
+        const unsub = navigation?.addListener('focus', () => fetchUserDevices(true));
+        return unsub;
+    }, [navigation]);
+
     const onRefresh = () => {
         setRefreshing(true);
-        fetchUserDevices();
+        fetchUserDevices(true);
+    };
+
+    // Online ho tabhi CollectionCloth par jaye, warna alert
+    const handleControlDevice = (item) => {
+        if (item.status !== 'online') {
+            Alert.alert(
+                'Device Offline',
+                'Device is offline. Please bring the device online first, then control it.'
+            );
+            return;
+        }
+        navigation.navigate('CollectionCloth', {
+            device: item,
+            serialNumber: item.serial_number,
+        });
     };
 
     const renderDeviceItem = ({ item }) => {
         const isReady = item.is_active;
+        const isOnline = item.status === 'online';
 
         return (
             <View style={styles.cardWrapper}>
@@ -76,12 +127,31 @@ const HomeScreen = ({ navigation, route }) => {
                             style={styles.toolImage}
                             resizeMode="cover"
                         />
+                        {/* Status Badges */}
                         <View style={styles.badgeFloat}>
                             <StatusBadge
-                                label={isReady ? "Warranty Active" : "Expired"}
-                                variant={isReady ? "success" : "danger"}
-                                icon={isReady ? "check-circle" : "alert-circle"}
+                                label={isReady ? 'Warranty Active' : 'Expired'}
+                                variant={isReady ? 'success' : 'danger'}
+                                icon={isReady ? 'check-circle' : 'alert-circle'}
                             />
+
+                            {/* Real-Time Online / Offline Badge */}
+                            <View
+                                style={[
+                                    styles.statusBadge,
+                                    { backgroundColor: isOnline ? '#2e7d32' : '#c62828' },
+                                ]}
+                            >
+                                <View
+                                    style={[
+                                        styles.dot,
+                                        { backgroundColor: isOnline ? '#4caf50' : '#ef5350' },
+                                    ]}
+                                />
+                                <Text style={styles.statusBadgeText}>
+                                    {isOnline ? 'ONLINE' : 'OFFLINE'}
+                                </Text>
+                            </View>
                         </View>
                     </View>
 
@@ -90,7 +160,7 @@ const HomeScreen = ({ navigation, route }) => {
                         <Eyebrow>{item.model_number}</Eyebrow>
                         <Text style={styles.toolTitle}>{item.product_name}</Text>
 
-                        {/* Professional Meta Details */}
+                        {/* Meta Details */}
                         <View style={styles.metaContainer}>
                             <View style={styles.metaRow}>
                                 <Text style={styles.metaLabel}>DEVICE ID / SN:</Text>
@@ -109,7 +179,7 @@ const HomeScreen = ({ navigation, route }) => {
                         <PrimaryButton
                             title="CONTROL DEVICE"
                             icon="arrow-right"
-                            onPress={() => navigation.navigate('CollectionCloth', { device: item })}
+                            onPress={() => handleControlDevice(item)}
                             style={{ marginTop: spacing.lg }}
                         />
                     </View>
@@ -141,6 +211,7 @@ const HomeScreen = ({ navigation, route }) => {
                     data={devices}
                     keyExtractor={(item) => item.id.toString()}
                     renderItem={renderDeviceItem}
+                    extraData={devices}
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
@@ -224,6 +295,29 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: spacing.md,
         left: spacing.md,
+        right: spacing.md,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    statusBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    dot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        marginRight: 6,
+    },
+    statusBadgeText: {
+        color: '#ffffff',
+        fontSize: 10,
+        fontWeight: '700',
+        letterSpacing: 0.5,
     },
     toolBody: {
         padding: spacing.xl,

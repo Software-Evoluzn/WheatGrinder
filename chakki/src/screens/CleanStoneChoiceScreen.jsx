@@ -114,14 +114,22 @@ const StoneHero = () => {
   );
 };
 
-const CleanStoneChoiceScreen = ({ navigation }) => {
+const CleanStoneChoiceScreen = ({ navigation, route }) => {
+  const { serialNumber, device } = route.params || {};
+
   // --- functionality preserved exactly ---
   const handleYes = () => {
-    if (navigation?.navigate) navigation.navigate('CleaningProcessScreen');
+    if (navigation?.navigate) navigation.navigate('CleaningProcessScreen', {
+      serialNumber: serialNumber,
+      device: device,
+    });
   };
 
   const handleNo = () => {
-    if (navigation?.navigate) navigation.navigate('GrainConfirmationScreen');
+    if (navigation?.navigate) navigation.navigate('GrainConfirmationScreen', {
+      serialNumber: serialNumber,
+      device: device,
+    });
   };
 
   return (

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, Pressable, Modal } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Screen,
   MainHeader,
@@ -12,8 +13,10 @@ import {
   AppDialog,
 } from './ui';
 import { colors, spacing, radii, shadows, typography, layout } from './theme';
+import { sendDeviceCommand, fetchRegisteredSerialNumber } from '../services/deviceApi';
 
-/* Static overflow (kebab) menu — no API / no dynamic data. */
+import { getGrainConfig } from '../services/grainLevels';
+
 const HeaderMenu = () => {
   const [open, setOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -65,38 +68,106 @@ const HeaderMenu = () => {
   );
 };
 
-// GRAINS array mapped with calibration data from table
 const GRAINS = [
-  { id: 'wheat', label: 'WHEAT', image: require('../assets/images/wheat.png'), defaultTexture: 5, maxLimit: 0 },
-  { id: 'chana_dal', label: 'CHANA DAL', image: require('../assets/images/chana_dal.png'), defaultTexture: 15, maxLimit: 10 },
-  { id: 'rice', label: 'RICE', image: require('../assets/images/rice.png'), defaultTexture: 10, maxLimit: 2 },
-  { id: 'ragi', label: 'RAGI', image: require('../assets/images/ragi.png'), defaultTexture: 5, maxLimit: 0 },
-  { id: 'fada', label: 'SPLITS (FADA)', image: require('../assets/images/splits.png'), defaultTexture: 20, maxLimit: 10 },
-  { id: 'jowar', label: 'JOWAR', image: require('../assets/images/jowar.png'), defaultTexture: 5, maxLimit: 0 },
-  { id: 'bajra', label: 'BAJRA', image: require('../assets/images/bajra.png'), defaultTexture: 5, maxLimit: 0 },
-  { id: 'masala', label: 'MASALA', image: require('../assets/images/masala.png'), defaultTexture: 10, maxLimit: 2 },
-  { id: 'others', label: 'OTHERS', isOthers: true, defaultTexture: 8, maxLimit: 0 },
+  { id: 'wheat', command: 'wheat', label: 'WHEAT', image: require('../assets/images/wheat.png') },
+  { id: 'chana_dal', command: 'chanaDal', label: 'CHANA DAL', image: require('../assets/images/chana_dal.png') },
+  { id: 'rice', command: 'rice', label: 'RICE', image: require('../assets/images/rice.png') },
+  { id: 'ragi', command: 'ragi', label: 'RAGI', image: require('../assets/images/ragi.png') },
+  { id: 'fada', command: 'fada', label: 'SPLITS (FADA)', image: require('../assets/images/splits.png') },
+  { id: 'jowar', command: 'jowar', label: 'JOWAR', image: require('../assets/images/jowar.png') },
+  { id: 'bajra', command: 'bajra', label: 'BAJRA', image: require('../assets/images/bajra.png') },
+  { id: 'masala', command: 'masala', label: 'MASALA', image: require('../assets/images/masala.png') },
+  { id: 'others', command: 'other', label: 'OTHERS', isOthers: true },
 ];
 
-const SelectGrainScreen = ({ navigation }) => {
-  // --- functionality preserved exactly ---
+const resolveSerialNumber = async (route) => {
+  // Priority 1: Route params
+  const fromRoute = route?.params?.serialNumber;
+  if (fromRoute) return fromRoute;
+
+  // Priority 2: Stored Serial Number
+  const stored = await AsyncStorage.getItem('serial_number');
+  if (stored) return stored;
+
+  // Priority 3: Fetch from Backend
+  const customerId = (await AsyncStorage.getItem('customer_id')) || route?.params?.customerId;
+  if (!customerId) {
+    throw new Error('User session not found. Please log in again.');
+  }
+
+  const res = await fetchRegisteredSerialNumber(customerId);
+  console.log('Serial response:', res);
+
+  if (!res?.success && !res?.serial_number) {
+    throw new Error(res?.error || 'No registered machine found');
+  }
+
+  const serial = res.serial_number || res.data?.serial_number;
+  await AsyncStorage.setItem('serial_number', serial);
+  return serial;
+};
+
+const SelectGrainScreen = ({ navigation, route }) => {
   const [selectedGrain, setSelectedGrain] = useState('wheat');
+  const [sending, setSending] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
+  const serialNumber = route.params?.serialNumber;
 
-  const selectGrainData = GRAINS.find((g) => g.id === selectedGrain) || GRAINS[0];
+  const handleCleanStone = async () => {
+    if (sending) return;
 
-  const handleNext = () =>{
-    navigation.navigate('GrainConfirmationScreen' , {
-       grainId: selectGrainData.id,
-       grainName: selectGrainData.label,
-       defaultTexture: selectGrainData.defaultTexture,
-       maxLimit: selectGrainData.maxLimit,
-    });
+    try {
+      setSending(true);
+      // const serialNumber = await resolveSerialNumber(route);
+      // console.log('Opening CleaningProcess screen:', serialNumber);
+
+      navigation.navigate('CleaningProcessScreen', { serialNumber });
+    } catch (e) {
+      console.log('Clean stone error:', e);
+      setErrorMsg(e?.message || 'Could not find registered machine');
+    } finally {
+      setSending(false);
+    }
   };
 
+  const handleNext = async () => {
+    if (sending) return;
+
+    const grain = GRAINS.find((g) => g.id === selectedGrain);
+    if (!grain) {
+      setErrorMsg('Please select a grain.');
+      return;
+    }
+
+    setSending(true);
+    try {
+      const serialNumber = await resolveSerialNumber(route);   // uncomment
+
+      const res = await sendDeviceCommand(serialNumber, grain.command);
+      const isSuccess = res?.success || res?.status === 'success' || res?.status === 200;
+      if (!isSuccess) {
+        throw new Error(res?.error || res?.message || 'Could not send grain selection to machine');
+      }
+
+      //Grain config fetch karein
+
+      const grainConfig = getGrainConfig(grain.id);
+
+      navigation.navigate('GrainConfirmationScreen', {
+        serialNumber,
+        grain: grain.id,
+        grainCommand: grain.command,
+        texture: grainConfig.default,
+      });
+    } catch (e) {
+      setErrorMsg(e.message || 'Network error, please try again.');
+    } finally {
+      setSending(false);
+    }
+  };
   return (
     <Screen background={colors.background}>
-      {/* Header matches the flow screens: back + greeting/title + static menu. */}
       <MainHeader
         greeting="Machine Setup"
         title="Select Grain"
@@ -114,6 +185,7 @@ const SelectGrainScreen = ({ navigation }) => {
               <Pressable
                 key={item.id}
                 onPress={() => setSelectedGrain(item.id)}
+                disabled={sending}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSelected }}
                 style={[styles.card, isSelected && styles.cardSelected]}
@@ -141,25 +213,35 @@ const SelectGrainScreen = ({ navigation }) => {
         <Text style={styles.footer}>Powered by EVOLUZN</Text>
       </ScrollView>
 
-      {/* Bottom action area: same fixed BottomActionBar treatment as the rest
-          of the flow, instead of buttons scrolling with the grid. */}
       <BottomActionBar>
         <View style={styles.actions}>
-          {/* CLEAN STONE preserved with no handler, exactly as original */}
-          <SecondaryButton 
-          title="CLEAN STONE" 
-          fullWidth={false} 
-          style={{ flex: 1 }} 
-          onPress={() => navigation.navigate('CleaningProcessScreen')} />
+          <SecondaryButton
+            title="CLEAN STONE"
+            fullWidth={false}
+            style={{ flex: 1 }}
+            onPress={handleCleanStone}
+            disabled={sending}
+          />
           <PrimaryButton
-            title="NEXT"
+            title={sending ? 'SENDING...' : 'NEXT'}
             icon="arrow-right"
             fullWidth={false}
             style={{ flex: 1 }}
             onPress={handleNext}
+            disabled={sending}
           />
         </View>
       </BottomActionBar>
+
+      <AppDialog
+        visible={!!errorMsg}
+        onClose={() => setErrorMsg('')}
+        icon="alert-circle"
+        title="Couldn't select grain"
+        message={errorMsg}
+        confirmLabel="OK"
+        onConfirm={() => setErrorMsg('')}
+      />
     </Screen>
   );
 };
@@ -168,7 +250,6 @@ export default SelectGrainScreen;
 
 const CARD_GAP = spacing.md;
 const styles = StyleSheet.create({
-  // Overflow menu
   menuOverlay: { flex: 1, backgroundColor: 'transparent' },
   menuCard: {
     position: 'absolute',

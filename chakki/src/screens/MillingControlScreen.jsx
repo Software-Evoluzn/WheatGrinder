@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View, Pressable, Modal } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Screen, MainHeader, IconButton, StatusBadge, AppDialog } from './ui';
 import { colors, spacing, radii, shadows, typography, layout } from './theme';
+import { sendDeviceCommand, fetchRegisteredSerialNumber } from '../services/deviceApi';
 
 /* Static overflow (kebab) menu — no API / no dynamic data. */
 const HeaderMenu = () => {
@@ -49,7 +51,7 @@ const HeaderMenu = () => {
         onClose={() => setHelpOpen(false)}
         icon="help-circle"
         title="Help"
-        message="Tap START to load the grain and begin milling. Tap PAUSE to hold the process. Tap the Texture Chip to modify texture."
+        message="Tap START to load the grain and begin milling. Tap PAUSE to hold the process. Use the back arrow to return."
         confirmLabel="Got it"
         onConfirm={() => setHelpOpen(false)}
       />
@@ -57,50 +59,116 @@ const HeaderMenu = () => {
   );
 };
 
+/*
+ * Finds the machine's serial number, in this order:
+ *  1. passed from the previous screen (route param)
+ *  2. saved on the phone (at registration or a previous lookup)
+ *  3. fetched from the backend using the logged-in customer_id
+ */
+const resolveSerialNumber = async (route) => {
+  const fromRoute = route?.params?.serialNumber;
+  if (fromRoute) return fromRoute;
+
+  const stored = await AsyncStorage.getItem('serial_number');
+  if (stored) return stored;
+
+  const customerId = (await AsyncStorage.getItem('customer_id')) || route?.params?.customerId;
+  if (!customerId) {
+    throw new Error('User session not found. Please log in again.');
+  }
+
+  const res = await fetchRegisteredSerialNumber(customerId);
+  console.log('Serial response:', res);
+  if (!res?.success) {
+    throw new Error(res?.error || 'No registered machine found');
+  }
+
+  await AsyncStorage.setItem('serial_number', res.serial_number);
+  return res.serial_number;
+};
+
 const MillingControlScreen = ({ navigation, route }) => {
-  const grainId = route?.params?.grainId || 'wheat';
-  const selectedGrain = route?.params?.grainName || 'WHEAT';
+  // Previous screens send either { grainName } or { grain }
+  const selectedGrain = route?.params?.grainName || route?.params?.grain || 'WHEAT';
   const selectedTexture = route?.params?.texture || 'FINE';
-  const textureValue = route?.params?.textureValue ?? 5;
-  const maxLimit = route?.params?.maxLimit ?? 0;
 
   const [processState, setProcessState] = useState(null); // null | 'START' | 'PAUSE'
+  const [pendingAction, setPendingAction] = useState(null); // null | 'START' | 'PAUSE' (request in flight)
+  const [error, setError] = useState(null); // { title, message }
+
+  const sending = pendingAction !== null;
 
   const handleBack = () => {
     if (navigation?.goBack) navigation.goBack();
   };
 
-  const handleToggleStart = () => {
-    setProcessState('START');
-    setTimeout(() => {
-      navigation.navigate('LoadGrainToStart', {
-        grainName: selectedGrain,
-        texture: selectedTexture,
-        textureValue,
-      });
-    }, 200);
+  /*
+   * Publishes one MQTT command through the backend.
+   * Returns the serial number on success; throws with a readable message on failure.
+   */
+  const publish = async (command) => {
+    const serialNumber = await resolveSerialNumber(route);
+
+    console.log(`Sending ${command} to`, serialNumber);
+    const res = await sendDeviceCommand(serialNumber, command);
+    console.log('Publish response:', res);
+
+    if (!res?.success) {
+      throw new Error(res?.error || `Could not send ${command} to machine`);
+    }
+    return serialNumber;
   };
 
-  const handleTogglePause = () => {
-    setProcessState((prev) => (prev === 'PAUSE' ? null : 'PAUSE'));
+  // START -> publish "startGrinding", then open LoadGrainToStart.
+  // Also works as "resume" when the machine is paused.
+  const handleToggleStart = async () => {
+    if (sending) return;
+    setPendingAction('START');
+
+    try {
+      const serialNumber = await publish('startGrinding');
+      setProcessState('START');
+
+      // navigation.navigate('LoadGrainToStart', {
+      //   grainName: selectedGrain,
+      //   texture: selectedTexture,
+      //   serialNumber,
+      // });
+    } catch (e) {
+      setError({ title: "Couldn't start", message: e.message });
+    } finally {
+      setPendingAction(null);
+    }
   };
 
-  // Direct Texture Level change Handler
-  const handleChangeTexture = () => {
-    navigation.navigate('SetGrindTexture', {
-      grainId,
-      grainName: selectedGrain,
-      defaultTexture: textureValue,
-      maxLimit,
-    });
+  // PAUSE -> publish "pauseGrinding". Tapping again while paused only clears
+  // the highlight; use START to resume the machine.
+  const handleTogglePause = async () => {
+    if (sending) return;
+
+    if (processState === 'PAUSE') {
+      setProcessState(null);
+      return;
+    }
+
+    setPendingAction('PAUSE');
+    try {
+      await publish('pauseGrinding');
+      setProcessState('PAUSE');
+    } catch (e) {
+      setError({ title: "Couldn't pause", message: e.message });
+    } finally {
+      setPendingAction(null);
+    }
   };
 
   const Control = ({ active, icon, label, onPress, iconNudge = 0 }) => (
     <View style={styles.controlItem}>
       <Pressable
         onPress={onPress}
+        disabled={sending}
         accessibilityRole="button"
-        accessibilityState={{ selected: active }}
+        accessibilityState={{ selected: active, busy: sending }}
         style={[styles.outerCircle, active ? styles.outerActive : styles.outerDefault]}
       >
         <View style={[styles.innerCircle, active && styles.innerActive]}>
@@ -110,6 +178,13 @@ const MillingControlScreen = ({ navigation, route }) => {
       <Text style={[styles.controlLabel, active && styles.controlLabelActive]}>{label}</Text>
     </View>
   );
+
+  const statusLabel =
+    pendingAction === 'START' ? 'Starting'
+    : pendingAction === 'PAUSE' ? 'Pausing'
+    : processState === 'START' ? 'Running'
+    : processState === 'PAUSE' ? 'Paused'
+    : 'Ready';
 
   return (
     <Screen background={colors.background}>
@@ -122,7 +197,7 @@ const MillingControlScreen = ({ navigation, route }) => {
 
       <View style={styles.body}>
         <StatusBadge
-          label={processState === 'START' ? 'Starting' : processState === 'PAUSE' ? 'Paused' : 'Ready'}
+          label={statusLabel}
           variant={processState === 'PAUSE' ? 'warning' : 'info'}
           icon={processState === 'PAUSE' ? 'pause' : 'zap'}
           style={{ marginBottom: spacing.xl }}
@@ -130,30 +205,14 @@ const MillingControlScreen = ({ navigation, route }) => {
 
         {/* Selected configuration (from route params) */}
         <View style={styles.configRow}>
-          {/* Grain Chip */}
           <View style={styles.configChip}>
             <Feather name="box" size={14} color={colors.primary} style={{ marginRight: spacing.sm }} />
             <Text style={styles.configText}>{selectedGrain.toUpperCase()}</Text>
           </View>
-
-          {/* Interactive Texture & Highlighted Level Chip */}
-          <Pressable
-            style={({ pressed }) => [styles.configChip, styles.editableTextureChip, pressed && { opacity: 0.8 }]}
-            onPress={handleChangeTexture}
-            accessibilityRole="button"
-            accessibilityLabel="Change texture level"
-          >
-            <Feather name="sliders" size={14} color={colors.primary} style={{ marginRight: spacing.xs }} />
+          <View style={styles.configChip}>
+            <Feather name="sliders" size={14} color={colors.primary} style={{ marginRight: spacing.sm }} />
             <Text style={styles.configText}>{selectedTexture.toUpperCase()}</Text>
-            
-            {/* Highlight Badge for Level */}
-            <View style={styles.levelBadge}>
-              <Text style={styles.levelLabelText}>LVL</Text>
-              <Text style={styles.levelValueText}>{textureValue}</Text>
-            </View>
-
-            <Feather name="edit-2" size={18} color={colors.primary} style={{ marginLeft: spacing.xs }} />
-          </Pressable>
+          </View>
         </View>
 
         <Text style={styles.prompt}>Choose an action to control milling</Text>
@@ -163,6 +222,17 @@ const MillingControlScreen = ({ navigation, route }) => {
           <Control active={processState === 'PAUSE'} icon="pause" label="PAUSE" onPress={handleTogglePause} />
         </View>
       </View>
+
+      {/* Error dialog if serial lookup or MQTT publish fails */}
+      <AppDialog
+        visible={!!error}
+        onClose={() => setError(null)}
+        icon="alert-circle"
+        title={error?.title || 'Something went wrong'}
+        message={error?.message}
+        confirmLabel="OK"
+        onConfirm={() => setError(null)}
+      />
     </Screen>
   );
 };
@@ -201,32 +271,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.primaryTintBorder,
   },
-  editableTextureChip: {
-    paddingRight: spacing.sm,
-  },
   configText: { fontSize: 13, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 },
-
-  // Highlighted Level Badge inside texture chip
-  levelBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.pill,
-    marginHorizontal: spacing.xs,
-    gap: 2,
-  },
-  levelLabelText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: colors.primarySubtle,
-  },
-  levelValueText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: colors.surface,
-  },
 
   prompt: { ...typography.subtitle, color: colors.textSecondary, marginBottom: spacing.huge, textAlign: 'center' },
   controlsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 44 },

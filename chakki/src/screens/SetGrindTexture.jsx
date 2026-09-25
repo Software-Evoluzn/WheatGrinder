@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, Modal, Pressable } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Screen,
   MainHeader,
@@ -12,10 +13,11 @@ import {
   AppDialog,
 } from './ui';
 import { colors, spacing, radii, shadows, typography, layout } from './theme';
+import { sendDeviceCommand, fetchRegisteredSerialNumber } from '../services/deviceApi';
+import { getGrainConfig } from '../services/grainLevels'; // apna sahi path lagao
 
 /* -------------------------------------------------------------------------- */
 /*  HeaderMenu — static overflow (kebab) menu. No API / no dynamic data.       */
-/*    Items are defined locally; "Help" opens a themed dialog with static text. */
 /* -------------------------------------------------------------------------- */
 const HeaderMenu = () => {
   const [open, setOpen] = useState(false);
@@ -78,64 +80,115 @@ const HeaderMenu = () => {
   );
 };
 
+/*
+ * Finds the machine's serial number, in this order:
+ *  1. passed from the previous screen (route param)
+ *  2. saved on the phone (at registration or a previous lookup)
+ *  3. fetched from the backend using the logged-in customer_id
+ */
+const resolveSerialNumber = async (route) => {
+  const fromRoute = route?.params?.serialNumber;
+  if (fromRoute) return fromRoute;
+
+  const stored = await AsyncStorage.getItem('serial_number');
+  if (stored) return stored;
+
+  const customerId = (await AsyncStorage.getItem('customer_id')) || route?.params?.customerId;
+  if (!customerId) {
+    throw new Error('User session not found. Please log in again.');
+  }
+
+  const res = await fetchRegisteredSerialNumber(customerId);
+  console.log('Serial response:', res);
+  if (!res?.success) {
+    throw new Error(res?.error || 'No registered machine found');
+  }
+
+  await AsyncStorage.setItem('serial_number', res.serial_number);
+  return res.serial_number;
+};
+
 const SetGrindTexture = ({ navigation, route }) => {
-  // --- functionality preserved exactly ---
-  const grainId = route?.params?.grainId || 'wheat';
-  const grainName = route?.params?.grainName || 'WHEAT';
-  const defaultTexture = route?.params?.defaultTexture ?? 5;
-  const maxLimit = route?.params?.maxLimit ?? 0;
+  // GrainConfirmationScreen sends { grain } (id like 'chana_dal'), others may send { grainName }
+  const grainId = route?.params?.grainName || route?.params?.grain || 'wheat';
+  const cfg = getGrainConfig(grainId);
 
+  const [textureLevel, setTextureLevel] = useState(cfg.default);
+  const [sending, setSending] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
+  // If the grain changes while this screen instance is reused, reset to that grain's default
+  useEffect(() => {
+    setTextureLevel(cfg.default);
+  }, [grainId, cfg.default]);
 
-  // Initialize level from defaultTexture prop
-  const [textureLevel, setTextureLevel] = useState(defaultTexture);
+  // Position of the current level inside this grain's min..max range (0 to 1)
+  const pct = cfg.max > cfg.min ? (textureLevel - cfg.min) / (cfg.max - cfg.min) : 0;
 
   const getTextureLabel = () => {
-    if (textureLevel <= 6) return 'FINE';
-    if (textureLevel <= 14) return 'MEDIUM';
+    if (pct <= 0.3) return 'FINE';
+    if (pct <= 0.7) return 'MEDIUM';
     return 'COARSE';
   };
 
   const handleBack = () => {
     if (navigation?.goBack) navigation.goBack();
   };
-  const handleDecrease = () => setTextureLevel((prev) => Math.max(0, prev - 1));
-  const handleIncrease = () => setTextureLevel((prev) => Math.min(20, prev + 1));
-  const handleSet = () => {
-   navigation.navigate('GrainConfirmationScreen', {
-      grainId,
-      grainName,
-      defaultTexture: textureLevel, // Updated value
-      texture: getTextureLabel(),
-      maxLimit,
-    });
+  const handleDecrease = () => setTextureLevel((prev) => Math.max(cfg.min, prev - 1));
+  const handleIncrease = () => setTextureLevel((prev) => Math.min(cfg.max, prev + 1));
+
+  // SET -> publish "grindingLevel:LEVEL", then open the milling control screen
+  const handleSet = async () => {
+    if (sending) return;
+    setSending(true);
+
+    try {
+      const serialNumber = await resolveSerialNumber(route);
+
+      console.log(`Sending grindingLevel:${textureLevel} to`, serialNumber);
+      const res = await sendDeviceCommand(serialNumber, 'grindingLevel', { value: textureLevel });
+      console.log('Publish response:', res);
+
+      if (!res?.success) {
+        throw new Error(res?.error || 'Could not send grinding level to machine');
+      }
+
+      navigation.navigate('MillingControlScreen', {
+        grain: grainId,
+        grainName: cfg.label,
+        texture: getTextureLabel(),
+        textureValue: textureLevel,
+        serialNumber,
+      });
+    } catch (e) {
+      setErrorMsg(e.message);
+    } finally {
+      setSending(false);
+    }
   };
 
-  const MAX_LEVEL = 20;
+  const segments = 10;
+  const active = Math.round(pct * segments);
 
   return (
     <Screen background={colors.background}>
-      {/* Header: same MainHeader structure/spacing as the rest of the flow.
-          Grain (static for this screen) takes the title slot; texture is
-          dynamic, so it moves into a live pill below rather than the header
-          subtitle slot, matching the pattern used on GrainConfirmationScreen. */}
       <MainHeader
         greeting="My Kitchen Tools"
-        title={grainName.toUpperCase()}
+        title={cfg.label}
         onBack={handleBack}
         right={<HeaderMenu />}
       />
 
       <View style={styles.texturePill}>
         <View style={styles.dot} />
-        <Text style={styles.texturePillText}>Texture · {getTextureLabel()}</Text>
+        <Text style={styles.texturePillText}>
+          {sending ? 'Setting level' : `Texture · ${getTextureLabel()}`}
+        </Text>
       </View>
 
       <View style={styles.body}>
         <Eyebrow style={{ alignSelf: 'center' }}>Grinding texture</Eyebrow>
 
-        {/* Hero composition: same glow/ring shell as the rest of the flow,
-            wrapped around the existing value dial (real state, unchanged). */}
         <View style={styles.hero}>
           <View style={styles.glow} />
           <View style={styles.ringStatic} />
@@ -149,23 +202,39 @@ const SetGrindTexture = ({ navigation, route }) => {
         <View style={styles.stepperRow}>
           <IconButton name="minus" onPress={handleDecrease} variant="ghost" size={24} accessibilityLabel="Decrease texture" />
           <View style={styles.segments}>
-            {Array.from({ length: MAX_LEVEL }).map((_, i) => (
-              <View key={i} style={[styles.segment, i < textureLevel && styles.segmentActive]} />
+            {Array.from({ length: segments }).map((_, i) => (
+              <View key={i} style={[styles.segment, i < active && styles.segmentActive]} />
             ))}
           </View>
           <IconButton name="plus" onPress={handleIncrease} variant="ghost" size={24} accessibilityLabel="Increase texture" />
         </View>
 
         <View style={styles.scaleLabels}>
-          <Text style={styles.scaleText}>FINE (0-6)</Text>
-          <Text style={styles.scaleText}>MEDIUM (7-14)</Text>
-          <Text style={styles.scaleText}>COARSE (15-20)</Text>
+          <Text style={styles.scaleText}>FINE</Text>
+          <Text style={styles.scaleText}>MEDIUM</Text>
+          <Text style={styles.scaleText}>COARSE</Text>
         </View>
       </View>
 
       <BottomActionBar>
-        <PrimaryButton title="SET" icon="check" onPress={handleSet} />
+        <PrimaryButton
+          title={sending ? 'SENDING...' : 'SET'}
+          icon="check"
+          onPress={handleSet}
+          disabled={sending}
+        />
       </BottomActionBar>
+
+      {/* Error dialog if serial lookup or MQTT publish fails */}
+      <AppDialog
+        visible={!!errorMsg}
+        onClose={() => setErrorMsg('')}
+        icon="alert-circle"
+        title="Couldn't set texture"
+        message={errorMsg}
+        confirmLabel="OK"
+        onConfirm={() => setErrorMsg('')}
+      />
     </Screen>
   );
 };
@@ -209,7 +278,6 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
 
-  // Live texture pill — reflects real state, not decorative
   texturePill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -238,7 +306,6 @@ const styles = StyleSheet.create({
 
   body: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing.xxl },
 
-  // Hero shell around the dial
   hero: {
     width: HERO,
     height: HERO,

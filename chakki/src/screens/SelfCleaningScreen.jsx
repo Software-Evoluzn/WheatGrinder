@@ -20,6 +20,8 @@ import {
 } from './ui';
 import { colors, spacing, radii, typography, shadows, layout } from './theme';
 
+import { sendDeviceCommand } from '../services/deviceApi';
+
 /* -------------------------------------------------------------------------- */
 /*  HeaderMenu — static overflow (kebab) menu. No API / no dynamic data.       */
 /*    Items are defined locally; "Help" opens a themed dialog with static text. */
@@ -135,11 +137,42 @@ const CleaningHero = () => {
   );
 };
 
-const SelfCleaningScreen = ({ navigation }) => {
-  const handleNext = () => {
-    if (navigation?.navigate) {
-      navigation.navigate('CleaningProcessScreen');
+const SelfCleaningScreen = ({ navigation, route }) => {
+
+
+  const { serialNumber, device } = route.params || {};
+  const [isPublishing, setIsPublishing] = useState(false);
+
+  console.log("serial number ", serialNumber);
+  const handleNext = async() => {
+
+    if (isPublishing) return
+
+    setIsPublishing(true);
+
+    try {
+      const response = await sendDeviceCommand(serialNumber, 'selfCleaningProcess');
+
+      if (response && response.success) {
+        console.log("Command published successfully:  ", response);
+
+      } else {
+        console.warn("Failed or non-ok response from API:", response);
+      }
+    } catch (error) {
+      console.log("Error sending cleaning command:", error);
+    } finally {
+      setIsPublishing(false);
+
+      if (navigation?.navigate) {
+        navigation.navigate('CleaningProcessScreen', {
+          serialNumber: serialNumber,
+          device: device,
+        });
+      }
     }
+
+
   };
 
   return (
@@ -166,7 +199,12 @@ const SelfCleaningScreen = ({ navigation }) => {
       </View>
 
       <BottomActionBar>
-        <PrimaryButton title="NEXT" icon="arrow-right" onPress={handleNext} />
+        <PrimaryButton 
+        title= {isPublishing ? "PLEASE WAIT... " :  "NEXT"} 
+        icon = {isPublishing ?  undefined : "arrow-right" }
+        onPress={handleNext}
+        disabled={isPublishing}
+         />
       </BottomActionBar>
     </Screen>
   );

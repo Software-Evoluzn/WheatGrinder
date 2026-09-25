@@ -1,49 +1,95 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
-import { Screen, MainHeader, SelectableCard, FootNote } from './ui';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Screen, MainHeader, SelectableCard, FootNote, AppDialog } from './ui';
 import { colors, spacing, radii, shadows } from './theme';
+import { sendDeviceCommand, fetchRegisteredSerialNumber } from '../services/deviceApi';
+import { getGrainConfig } from '../services/grainLevels';
+
+const resolveSerialNumber = async (route) => {
+  const fromRoute = route?.params?.serialNumber;
+  if (fromRoute) return fromRoute;
+
+  const stored = await AsyncStorage.getItem('serial_number');
+  if (stored) return stored;
+
+  const customerId = (await AsyncStorage.getItem('customer_id')) || route?.params?.customerId;
+  if (!customerId) {
+    throw new Error('User session not found. Please log in again.');
+  }
+
+  const res = await fetchRegisteredSerialNumber(customerId);
+  console.log('Serial response:', res);
+  if (!res?.success) {
+    throw new Error(res?.error || 'No registered machine found');
+  }
+
+  await AsyncStorage.setItem('serial_number', res.serial_number);
+  return res.serial_number;
+};
 
 const GrainConfirmationScreen = ({ navigation, route }) => {
-  const grainId = route?.params?.grainId || 'wheat';
-  const grainName = route?.params?.grainName || 'WHEAT';
-  const defaultTexture = route?.params?.defaultTexture ?? 5;
-  const maxLimit = route?.params?.maxLimit ?? 0;
+  const serialNumber = route?.params?.serialNumber;
+  const grainId = route?.params?.grain || 'wheat';
 
-  // Level ke hisab se label calculate karne ka function
-  const getTextureLabel = (val) => {
-    if (val <= 6) return 'FINE';
-    if (val <= 14) return 'MEDIUM';
-    return 'COARSE';
-  };
+  // 1. Config se details aur default texture fetch karein
+  const grainConfig = getGrainConfig(grainId);
+  const grainName = route?.params?.grainName || grainConfig?.label || grainId.toUpperCase();
 
-  const textureLabel = route?.params?.texture || getTextureLabel(defaultTexture);
-  const textureLevel = defaultTexture;
+  // 2. Priority: Previous Screen Params -> Config Default Texture -> Fallback
+  const texture = route?.params?.texture ?? grainConfig?.default ?? 5;
+
+  console.log('GrainConfirmationScreen Route Params:', route?.params);
+  console.log('Resolved Texture Level:', texture);
 
   const [selectedOption, setSelectedOption] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleBack = () => {
-    if (navigation?.goBack) navigation.navigate('SelectGrain');
+    if (navigation?.canGoBack?.()) navigation.goBack();
+    else navigation.navigate('SelectGrain', { serialNumber });
   };
 
-  const handleStartProcess = () => {
+  // START -> publish "startGrinding", then open the milling control screen
+  const handleStartProcess = async () => {
+    if (sending) return;
     setSelectedOption('start');
-    navigation.navigate('MillingControlScreen', {
-      grainId,
-      grainName,
-      texture: textureLabel,
-      textureValue: textureLevel,
-      maxLimit,
-    });
+    setSending(true);
+
+    try {
+      const serial = await resolveSerialNumber(route);
+
+      console.log('Sending startGrinding to', serial);
+      const res = await sendDeviceCommand(serial, 'startGrinding');
+      console.log('Publish response:', res);
+
+      if (!res?.success) {
+        throw new Error(res?.error || 'Could not send start command to machine');
+      }
+
+      navigation.navigate('MillingControlScreen', {
+        grain: grainName,
+        texture: texture,
+        serialNumber: serial,
+      });
+    } catch (e) {
+      setSelectedOption(null);
+      setErrorMsg(e.message);
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleSetTexture = () => {
+    if (sending) return;
     setSelectedOption('texture');
     navigation.navigate('SetGrindTexture', {
-      grainId,
-      grainName,
-      defaultTexture: textureLevel,
-      maxLimit,
+      grain: grainName,
+      grainId: grainId,
+      texture: texture,
+      serialNumber,
     });
   };
 
@@ -62,21 +108,14 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
           </View>
         </View>
 
-        {/* Highlighted Texture & Level Pill */}
+        {/* Dynamic Default Texture Display */}
         <View style={styles.texturePill}>
           <View style={styles.dot} />
           <Text style={styles.textureText}>
-            TEXTURE · 
+            {sending
+              ? 'Starting grinding'
+              : `Default Texture · Level ${texture}`}
           </Text>
-           {/* <Text style={styles.textureText}>
-            TEXTURE · <Text style={styles.textureModeText}>{textureLabel.toUpperCase()}</Text>
-          </Text> */}
-          
-          {/* Highlight Badge specifically for Level Value */}
-          <View style={styles.levelBadge}>
-            {/* <Text style={styles.levelLabelText}>LVL</Text> */}
-            <Text style={styles.levelValueText}>{textureLevel}</Text>
-          </View>
         </View>
 
         <Text style={styles.question}>What would you like to do?</Text>
@@ -86,7 +125,7 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
             selected={selectedOption === 'start'}
             onPress={handleStartProcess}
             icon="play"
-            label="START"
+            label={sending ? 'SENDING...' : 'START'}
           />
           <SelectableCard
             selected={selectedOption === 'texture'}
@@ -100,28 +139,40 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
       <View style={styles.footer}>
         <FootNote>Use the back button to choose a different grain</FootNote>
       </View>
+
+      {/* Error dialog if serial lookup or MQTT publish fails */}
+      <AppDialog
+        visible={!!errorMsg}
+        onClose={() => setErrorMsg('')}
+        icon="alert-circle"
+        title="Couldn't start grinding"
+        message={errorMsg}
+        confirmLabel="OK"
+        onConfirm={() => setErrorMsg('')}
+      />
     </Screen>
   );
 };
 
 export default GrainConfirmationScreen;
 
-const BADGE = 130;
+const BADGE = 140;
 
 const styles = StyleSheet.create({
   body: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    justify: 'center',
     paddingHorizontal: spacing.xxl,
   },
+
   badgeOuter: {
     width: BADGE,
     height: BADGE,
     borderRadius: BADGE / 2,
     backgroundColor: colors.primaryTint,
     alignItems: 'center',
-    justifyContent: 'center',
+    justify: 'center',
   },
   badgeInner: {
     width: BADGE - 24,
@@ -131,19 +182,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
-    justifyContent: 'center',
+    justify: 'center',
     ...shadows.card,
   },
-  
-  // Highlight Pill Styles
+
   texturePill: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
     marginTop: spacing.xl,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.xs,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
     borderRadius: radii.pill,
     backgroundColor: colors.primaryTint,
     borderWidth: 1,
@@ -157,37 +206,10 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   textureText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    letterSpacing: 0.5,
-    marginRight: spacing.md,
-  },
-  textureModeText: {
+    fontSize: 13,
     fontWeight: '800',
     color: colors.primary,
-  },
-  
-  // Specially highlighted level chip
-  levelBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-    borderRadius: radii.pill,
-    gap: 4,
-  },
-  levelLabelText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.primarySubtle,
     letterSpacing: 0.5,
-  },
-  levelValueText: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: colors.surface,
   },
 
   question: {
@@ -198,13 +220,15 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxxl,
     letterSpacing: 0.2,
   },
+
   cardsRow: {
     flexDirection: 'row',
     gap: spacing.lg,
     marginTop: spacing.xl,
     alignSelf: 'stretch',
-    justifyContent: 'center',
+    justify: 'center',
   },
+
   footer: {
     alignItems: 'center',
     paddingBottom: spacing.xxl,

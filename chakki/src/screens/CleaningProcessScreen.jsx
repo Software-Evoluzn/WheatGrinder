@@ -142,7 +142,9 @@ const DoneHero = ({ checkScale }) => (
   </View>
 );
 
-const CleaningProcessScreen = ({ navigation }) => {
+const CleaningProcessScreen = ({ navigation  , route}) => {
+
+  const { serialNumber, device } = route.params || {};
   // --- functionality preserved exactly ---
   const [progress, setProgress] = useState(0);
   const [phase, setPhase] = useState('progress'); // 'progress' | 'done'
@@ -175,8 +177,15 @@ const CleaningProcessScreen = ({ navigation }) => {
     if (phase !== 'done') return undefined;
     Animated.spring(checkScale, { toValue: 1, friction: 5, tension: 80, useNativeDriver: true }).start();
     const advance = setTimeout(() => {
-      if (navigation?.replace) navigation.replace(NEXT_ROUTE);
-      else if (navigation?.navigate) navigation.navigate(NEXT_ROUTE);
+      if (navigation?.replace) navigation.replace(NEXT_ROUTE,
+        {  
+          serialNumber: serialNumber,
+          device: device,
+        });
+      else if (navigation?.navigate) navigation.navigate(NEXT_ROUTE , 
+        {  serialNumber: serialNumber,
+          device: device,
+        });
     }, DONE_HOLD_MS);
     return () => clearTimeout(advance);
   }, [phase, checkScale, navigation]);

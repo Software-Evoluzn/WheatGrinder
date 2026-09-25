@@ -118,9 +118,17 @@ const ClothHero = () => {
   );
 };
 
-const CollectionClothScreen = ({ navigation }) => {
+const CollectionClothScreen = ({ navigation, route }) => {
+
+  // 2. Extract the serialNumber (or entire device object) from route params
+  const serialNumber = route?.params?.serialNumber || route?.params?.device?.serial_number;
+  const device = route?.params?.device;
+
   const handleNext = () => {
-    if (navigation?.navigate) navigation.navigate('ReadyToInitiateSelfCleaning');
+    if (navigation?.navigate) navigation.navigate('ReadyToInitiateSelfCleaning', {
+      serialNumber: serialNumber,
+      device: device
+    });
   };
 
   return (

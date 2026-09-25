@@ -20,6 +20,8 @@ import {
   AppDialog,
 } from './ui';
 import { colors, spacing, radii, typography, shadows, layout } from './theme';
+import { sendDeviceCommand, fetchRegisteredSerialNumber } from '../services/deviceApi';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /* -------------------------------------------------------------------------- */
 /*  HeaderMenu — static overflow (kebab) menu. No API / no dynamic data.       */
@@ -126,10 +128,53 @@ const ReadyHero = () => {
   );
 };
 
-const ReadyToInitiateSelfCleaning = ({ navigation }) => {
-  const handleReady = () => {
-    if (navigation?.navigate) {
-      navigation.navigate('SelfCleaning');
+/* -------------------------------------------------------------------------- */
+/*  ReadyToInitiateSelfCleaning — READY publishes "selfCleaningProcess" via    */
+/*    backend (/api/mqtt/publish → <serial>/control), then navigates.          */
+/* -------------------------------------------------------------------------- */
+const ReadyToInitiateSelfCleaning = ({ navigation, route }) => {
+  const [sending, setSending] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const handleReady = async () => {
+    if (sending) return;
+    setSending(true);
+
+    try {
+      // 1. Get the machine's serial number
+      //    (passed from previous screen, otherwise fetched from backend)
+      // 1. Get the machine's serial number
+      let serialNumber =
+        route?.params?.serialNumber || (await AsyncStorage.getItem('serial_number'));
+
+      if (!serialNumber) {
+        const customerId = (await AsyncStorage.getItem('customer_id')) || route?.params?.customerId;
+        if (!customerId) {
+          throw new Error('User session not found. Please log in again.');
+        }
+        const serialRes = await fetchRegisteredSerialNumber(customerId);
+        console.log('Serial response:', serialRes);
+        if (!serialRes?.success) {
+          throw new Error(serialRes?.error || 'No registered machine found');
+        }
+        serialNumber = serialRes.serial_number;
+        await AsyncStorage.setItem('serial_number', serialNumber);
+      }
+      // 2. Publish the MQTT command through the backend
+      console.log('Sending selfCleaningProcess to', serialNumber);
+      const res = await sendDeviceCommand(serialNumber, 'selfCleaningProcess');
+      console.log('Publish response:', res);
+
+      if (!res?.success) {
+        throw new Error(res?.error || 'Could not send command to machine');
+      }
+
+      // 3. Only move to the next screen after a successful publish
+      navigation?.navigate?.('SelfCleaning', { serialNumber });
+    } catch (e) {
+      setErrorMsg(e.message);
+    } finally {
+      setSending(false);
     }
   };
 
@@ -152,13 +197,29 @@ const ReadyToInitiateSelfCleaning = ({ navigation }) => {
 
         <View style={styles.statusPill}>
           <View style={styles.dot} />
-          <Text style={styles.statusText}>Ready</Text>
+          <Text style={styles.statusText}>{sending ? 'Sending command' : 'Ready'}</Text>
         </View>
       </View>
 
       <BottomActionBar>
-        <PrimaryButton title="READY" icon="check" onPress={handleReady} />
+        <PrimaryButton
+          title={sending ? 'SENDING...' : 'READY'}
+          icon="check"
+          onPress={handleReady}
+          disabled={sending}
+        />
       </BottomActionBar>
+
+      {/* Error dialog if serial fetch or MQTT publish fails */}
+      <AppDialog
+        visible={!!errorMsg}
+        onClose={() => setErrorMsg('')}
+        icon="alert-circle"
+        title="Couldn't start cleaning"
+        message={errorMsg}
+        confirmLabel="OK"
+        onConfirm={() => setErrorMsg('')}
+      />
     </Screen>
   );
 };
