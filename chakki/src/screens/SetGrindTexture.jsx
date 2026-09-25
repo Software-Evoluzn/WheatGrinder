@@ -14,11 +14,8 @@ import {
 } from './ui';
 import { colors, spacing, radii, shadows, typography, layout } from './theme';
 import { sendDeviceCommand, fetchRegisteredSerialNumber } from '../services/deviceApi';
-import { getGrainConfig } from '../services/grainLevels'; // apna sahi path lagao
+import { getGrainConfig } from '../services/grainLevels';
 
-/* -------------------------------------------------------------------------- */
-/*  HeaderMenu — static overflow (kebab) menu. No API / no dynamic data.       */
-/* -------------------------------------------------------------------------- */
 const HeaderMenu = () => {
   const [open, setOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -44,7 +41,7 @@ const HeaderMenu = () => {
         onRequestClose={() => setOpen(false)}
       >
         <Pressable style={styles.menuOverlay} onPress={() => setOpen(false)}>
-          <View style={[styles.menuCard, { top: insets.top + layout.headerContentHeight + spacing.sm }]}>
+          <View style={[styles.menuCard, { top: insets.top + (layout?.headerContentHeight || 56) + spacing.sm }]}>
             {items.map((item, i) => (
               <Pressable
                 key={item.label}
@@ -59,7 +56,12 @@ const HeaderMenu = () => {
                   pressed && { backgroundColor: colors.primaryTint },
                 ]}
               >
-                <Feather name={item.icon} size={18} color={colors.primary} style={{ marginRight: spacing.md }} />
+                <Feather 
+                  name={item.icon} 
+                  size={18} 
+                  color={colors.primary} 
+                  style={{ marginRight: spacing.md, includeFontPadding: false }} 
+                />
                 <Text style={styles.menuItemText}>{item.label}</Text>
               </Pressable>
             ))}
@@ -80,12 +82,6 @@ const HeaderMenu = () => {
   );
 };
 
-/*
- * Finds the machine's serial number, in this order:
- *  1. passed from the previous screen (route param)
- *  2. saved on the phone (at registration or a previous lookup)
- *  3. fetched from the backend using the logged-in customer_id
- */
 const resolveSerialNumber = async (route) => {
   const fromRoute = route?.params?.serialNumber;
   if (fromRoute) return fromRoute;
@@ -99,7 +95,6 @@ const resolveSerialNumber = async (route) => {
   }
 
   const res = await fetchRegisteredSerialNumber(customerId);
-  console.log('Serial response:', res);
   if (!res?.success) {
     throw new Error(res?.error || 'No registered machine found');
   }
@@ -109,20 +104,23 @@ const resolveSerialNumber = async (route) => {
 };
 
 const SetGrindTexture = ({ navigation, route }) => {
-  // GrainConfirmationScreen sends { grain } (id like 'chana_dal'), others may send { grainName }
-  const grainId = route?.params?.grainName || route?.params?.grain || 'wheat';
+  const grainId = route?.params?.grainId || route?.params?.grain || 'wheat';
   const cfg = getGrainConfig(grainId);
 
-  const [textureLevel, setTextureLevel] = useState(cfg.default);
+  // Grain Display Name priority
+  const grainDisplayName = route?.params?.grainName || cfg?.label || grainId.toUpperCase();
+
+  // Texture level default set
+  const initialTextureLevel = route?.params?.texture ?? cfg.default ?? 5;
+  const [textureLevel, setTextureLevel] = useState(initialTextureLevel);
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // If the grain changes while this screen instance is reused, reset to that grain's default
   useEffect(() => {
-    setTextureLevel(cfg.default);
-  }, [grainId, cfg.default]);
+    setTextureLevel(initialTextureLevel);
+  }, [grainId, initialTextureLevel]);
 
-  // Position of the current level inside this grain's min..max range (0 to 1)
+  // Position of current texture level inside grain's min..max range
   const pct = cfg.max > cfg.min ? (textureLevel - cfg.min) / (cfg.max - cfg.min) : 0;
 
   const getTextureLabel = () => {
@@ -134,20 +132,17 @@ const SetGrindTexture = ({ navigation, route }) => {
   const handleBack = () => {
     if (navigation?.goBack) navigation.goBack();
   };
+
   const handleDecrease = () => setTextureLevel((prev) => Math.max(cfg.min, prev - 1));
   const handleIncrease = () => setTextureLevel((prev) => Math.min(cfg.max, prev + 1));
 
-  // SET -> publish "grindingLevel:LEVEL", then open the milling control screen
   const handleSet = async () => {
     if (sending) return;
     setSending(true);
 
     try {
       const serialNumber = await resolveSerialNumber(route);
-
-      console.log(`Sending grindingLevel:${textureLevel} to`, serialNumber);
       const res = await sendDeviceCommand(serialNumber, 'grindingLevel', { value: textureLevel });
-      console.log('Publish response:', res);
 
       if (!res?.success) {
         throw new Error(res?.error || 'Could not send grinding level to machine');
@@ -155,7 +150,7 @@ const SetGrindTexture = ({ navigation, route }) => {
 
       navigation.navigate('MillingControlScreen', {
         grain: grainId,
-        grainName: cfg.label,
+        grainName: grainDisplayName,
         texture: getTextureLabel(),
         textureValue: textureLevel,
         serialNumber,
@@ -173,21 +168,22 @@ const SetGrindTexture = ({ navigation, route }) => {
   return (
     <Screen background={colors.background}>
       <MainHeader
-        greeting="My Kitchen Tools"
-        title={cfg.label}
+        greeting="Machine Setup"
+        title={grainDisplayName.toUpperCase()}
         onBack={handleBack}
         right={<HeaderMenu />}
       />
 
+      {/* Dynamic Default Texture Pill Display */}
       <View style={styles.texturePill}>
         <View style={styles.dot} />
         <Text style={styles.texturePillText}>
-          {sending ? 'Setting level' : `Texture · ${getTextureLabel()}`}
+          {sending ? 'SETTING LEVEL...' : `DEFAULT · ${getTextureLabel()}`}
         </Text>
       </View>
 
       <View style={styles.body}>
-        <Eyebrow style={{ alignSelf: 'center' }}>Grinding texture</Eyebrow>
+        <Eyebrow style={{ alignSelf: 'center' }}>Grinding Texture</Eyebrow>
 
         <View style={styles.hero}>
           <View style={styles.glow} />
@@ -195,18 +191,33 @@ const SetGrindTexture = ({ navigation, route }) => {
           <View style={styles.ringArc} />
           <View style={styles.valueCard}>
             <Text style={styles.valueLabel}>{getTextureLabel()}</Text>
-            <Text style={styles.valueSub}>{textureLevel}</Text>
+            <Text style={styles.valueSub}>Level {textureLevel}</Text>
           </View>
         </View>
 
         <View style={styles.stepperRow}>
-          <IconButton name="minus" onPress={handleDecrease} variant="ghost" size={24} accessibilityLabel="Decrease texture" />
+          <IconButton 
+            name="minus" 
+            onPress={handleDecrease} 
+            variant="ghost" 
+            size={24} 
+            accessibilityLabel="Decrease texture" 
+          />
           <View style={styles.segments}>
             {Array.from({ length: segments }).map((_, i) => (
-              <View key={i} style={[styles.segment, i < active && styles.segmentActive]} />
+              <View 
+                key={i} 
+                style={[styles.segment, i < active && styles.segmentActive]} 
+              />
             ))}
           </View>
-          <IconButton name="plus" onPress={handleIncrease} variant="ghost" size={24} accessibilityLabel="Increase texture" />
+          <IconButton 
+            name="plus" 
+            onPress={handleIncrease} 
+            variant="ghost" 
+            size={24} 
+            accessibilityLabel="Increase texture" 
+          />
         </View>
 
         <View style={styles.scaleLabels}>
@@ -225,7 +236,6 @@ const SetGrindTexture = ({ navigation, route }) => {
         />
       </BottomActionBar>
 
-      {/* Error dialog if serial lookup or MQTT publish fails */}
       <AppDialog
         visible={!!errorMsg}
         onClose={() => setErrorMsg('')}
@@ -242,18 +252,16 @@ const SetGrindTexture = ({ navigation, route }) => {
 export default SetGrindTexture;
 
 const HERO = 260;
-const center = (size) => (HERO - size) / 2;
 const DIAL = 200;
 
 const styles = StyleSheet.create({
-  // Overflow menu
   menuOverlay: {
     flex: 1,
     backgroundColor: 'transparent',
   },
   menuCard: {
     position: 'absolute',
-    right: layout.screenPaddingHorizontal,
+    right: layout?.screenPaddingHorizontal || spacing.lg,
     minWidth: 180,
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
@@ -270,7 +278,7 @@ const styles = StyleSheet.create({
   },
   menuItemBorder: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
+    borderTopColor: colors.divider || colors.border,
   },
   menuItemText: {
     fontSize: 15,
@@ -288,7 +296,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     backgroundColor: colors.primaryTint,
     borderWidth: 1,
-    borderColor: colors.primaryTintBorder,
+    borderColor: colors.primaryTintBorder || colors.border,
   },
   dot: {
     width: 8,
@@ -302,10 +310,17 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.primary,
     letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
 
-  body: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing.xxl },
+  body: { 
+    flex: 1, 
+    justify: 'center', 
+    justifyContent: 'center', 
+    paddingHorizontal: spacing.xxl 
+  },
 
+  /* --- HERO & CIRCULAR DIAL ALIGNMENT FIXES --- */
   hero: {
     width: HERO,
     height: HERO,
@@ -313,35 +328,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: spacing.xl,
+    position: 'relative', // Ensures absolute children center properly
   },
   glow: {
     position: 'absolute',
-    width: 236,
-    height: 236,
-    top: center(236),
-    left: center(236),
-    borderRadius: 118,
+    width: 250,
+    height: 250,
+    borderRadius: 125,
     backgroundColor: colors.primaryTint,
   },
   ringStatic: {
     position: 'absolute',
-    width: 222,
-    height: 222,
-    top: center(222),
-    left: center(222),
-    borderRadius: 111,
+    width: 230,
+    height: 230,
+    borderRadius: 115,
     borderWidth: 1,
-    borderColor: colors.primarySubtle,
+    borderColor: colors.primarySubtle || colors.border,
   },
   ringArc: {
     position: 'absolute',
-    width: 222,
-    height: 222,
-    top: center(222),
-    left: center(222),
-    borderRadius: 111,
+    width: 230,
+    height: 230,
+    borderRadius: 115,
     borderWidth: 6,
-    borderColor: colors.primaryTintBorder,
+    borderColor: colors.primaryTintBorder || colors.border,
   },
   valueCard: {
     width: DIAL,
@@ -349,17 +359,38 @@ const styles = StyleSheet.create({
     borderRadius: DIAL / 2,
     backgroundColor: colors.surface,
     borderWidth: 2,
-    borderColor: colors.primaryTintBorder,
+    borderColor: colors.primaryTintBorder || colors.border,
+    // Text ko exactly vertical aur horizontal center karne ke liye:
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 10,
     ...shadows.card,
   },
-  valueLabel: { fontSize: 30, fontWeight: '800', color: colors.primary, letterSpacing: 1 },
-  valueSub: { ...typography.subtitle, color: colors.textSecondary, marginTop: 4 },
+  valueLabel: { 
+    fontSize: 28, 
+    fontWeight: '800', 
+    color: colors.primary, 
+    letterSpacing: 1,
+    textAlign: 'center',
+    includeFontPadding: false,
+  },
+  valueSub: { 
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary, 
+    marginTop: 6,
+    textAlign: 'center',
+    includeFontPadding: false,
+  },
 
-  stepperRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.huge, gap: spacing.md },
+  stepperRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginTop: spacing.huge || spacing.xl, 
+    gap: spacing.md 
+  },
   segments: { flex: 1, flexDirection: 'row', gap: 6, alignItems: 'center' },
-  segment: { flex: 1, height: 12, borderRadius: 6, backgroundColor: colors.primarySubtle },
+  segment: { flex: 1, height: 12, borderRadius: 6, backgroundColor: colors.primarySubtle || colors.border },
   segmentActive: { backgroundColor: colors.primary },
   scaleLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.md, paddingHorizontal: 40 },
   scaleText: { ...typography.caption, color: colors.textMuted },

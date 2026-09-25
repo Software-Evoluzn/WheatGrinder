@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, Pressable } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Screen, MainHeader, SelectableCard, FootNote, AppDialog } from './ui';
-import { colors, spacing, radii, shadows } from './theme';
+import { Screen, MainHeader, FootNote, AppDialog } from './ui';
+import { colors, spacing, radii, shadows, typography } from './theme';
 import { sendDeviceCommand, fetchRegisteredSerialNumber } from '../services/deviceApi';
 import { getGrainConfig } from '../services/grainLevels';
 
@@ -20,7 +20,6 @@ const resolveSerialNumber = async (route) => {
   }
 
   const res = await fetchRegisteredSerialNumber(customerId);
-  console.log('Serial response:', res);
   if (!res?.success) {
     throw new Error(res?.error || 'No registered machine found');
   }
@@ -29,19 +28,43 @@ const resolveSerialNumber = async (route) => {
   return res.serial_number;
 };
 
+const ActionCard = ({ label, icon, selected, onPress, disabled, subtitle }) => (
+  <Pressable
+    onPress={onPress}
+    disabled={disabled}
+    accessibilityRole="button"
+    style={({ pressed }) => [
+      styles.actionCard,
+      selected && styles.actionCardSelected,
+      pressed && styles.actionCardPressed,
+      disabled && styles.actionCardDisabled,
+    ]}
+  >
+    <View style={[styles.actionIconWrap, selected && styles.actionIconWrapSelected]}>
+      <Feather
+        name={icon}
+        size={22}
+        color={selected ? colors.surface : colors.primary}
+      />
+    </View>
+    <Text style={[styles.actionLabel, selected && styles.actionLabelSelected]}>
+      {label}
+    </Text>
+    {subtitle ? (
+      <Text style={[styles.actionSubtitle, selected && styles.actionSubtitleSelected]}>
+        {subtitle}
+      </Text>
+    ) : null}
+  </Pressable>
+);
+
 const GrainConfirmationScreen = ({ navigation, route }) => {
   const serialNumber = route?.params?.serialNumber;
   const grainId = route?.params?.grain || 'wheat';
 
-  // 1. Config se details aur default texture fetch karein
   const grainConfig = getGrainConfig(grainId);
   const grainName = route?.params?.grainName || grainConfig?.label || grainId.toUpperCase();
-
-  // 2. Priority: Previous Screen Params -> Config Default Texture -> Fallback
   const texture = route?.params?.texture ?? grainConfig?.default ?? 5;
-
-  console.log('GrainConfirmationScreen Route Params:', route?.params);
-  console.log('Resolved Texture Level:', texture);
 
   const [selectedOption, setSelectedOption] = useState(null);
   const [sending, setSending] = useState(false);
@@ -52,7 +75,6 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
     else navigation.navigate('SelectGrain', { serialNumber });
   };
 
-  // START -> publish "startGrinding", then open the milling control screen
   const handleStartProcess = async () => {
     if (sending) return;
     setSelectedOption('start');
@@ -60,10 +82,7 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
 
     try {
       const serial = await resolveSerialNumber(route);
-
-      console.log('Sending startGrinding to', serial);
       const res = await sendDeviceCommand(serial, 'startGrinding');
-      console.log('Publish response:', res);
 
       if (!res?.success) {
         throw new Error(res?.error || 'Could not send start command to machine');
@@ -96,51 +115,62 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
   return (
     <Screen background={colors.background}>
       <MainHeader
-        greeting="My Kitchen Tools"
+        greeting="Machine Setup"
         title={grainName.toUpperCase()}
         onBack={handleBack}
       />
 
       <View style={styles.body}>
-        <View style={styles.badgeOuter}>
-          <View style={styles.badgeInner}>
-            <Feather name="check-circle" size={40} color={colors.primary} />
+        {/* Animated/Polished Grain Selection Badge */}
+        <View style={styles.badgeContainer}>
+          <View style={styles.badgeOuter}>
+            <View style={styles.badgeInner}>
+              <Feather name="check" size={35} color={colors.primary}
+              style={styles.checkIcon} />
+            </View>
           </View>
         </View>
 
-        {/* Dynamic Default Texture Display */}
+        {/* Dynamic Default Texture Display Pill */}
         <View style={styles.texturePill}>
-          <View style={styles.dot} />
+          <View style={[styles.dot, sending && styles.dotActive]} />
           <Text style={styles.textureText}>
-            {sending
-              ? 'Starting grinding'
-              : `Default Texture · Level ${texture}`}
+            {sending ? 'COMMUNICATING...' : `Default Texture  •  Level ${texture}`}
           </Text>
         </View>
 
-        <Text style={styles.question}>What would you like to do?</Text>
+        <View style={styles.promptContainer}>
+          <Text style={styles.question}>Ready to Grind?</Text>
+          <Text style={styles.subQuestion}>
+            Start immediately with default settings or adjust grind texture.
+          </Text>
+        </View>
 
+        {/* Dual Action Cards */}
         <View style={styles.cardsRow}>
-          <SelectableCard
+          <ActionCard
             selected={selectedOption === 'start'}
             onPress={handleStartProcess}
             icon="play"
             label={sending ? 'SENDING...' : 'START'}
+            subtitle="Begin grinding now"
+            disabled={sending}
           />
-          <SelectableCard
+          <ActionCard
             selected={selectedOption === 'texture'}
             onPress={handleSetTexture}
             icon="sliders"
             label="TEXTURE"
+            subtitle="Adjust coarseness"
+            disabled={sending}
           />
         </View>
       </View>
 
       <View style={styles.footer}>
-        <FootNote>Use the back button to choose a different grain</FootNote>
+        <FootNote>Use back arrow to change selected grain</FootNote>
       </View>
 
-      {/* Error dialog if serial lookup or MQTT publish fails */}
       <AppDialog
         visible={!!errorMsg}
         onClose={() => setErrorMsg('')}
@@ -156,82 +186,171 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
 
 export default GrainConfirmationScreen;
 
-const BADGE = 140;
+const BADGE_SIZE = 112;
 
 const styles = StyleSheet.create({
   body: {
     flex: 1,
     alignItems: 'center',
-    justify: 'center',
-    paddingHorizontal: spacing.xxl,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
   },
 
+  /* Hero Badge */
+  badgeContainer: {
+    marginBottom: spacing.lg,
+  },
   badgeOuter: {
-    width: BADGE,
-    height: BADGE,
-    borderRadius: BADGE / 2,
+    width: BADGE_SIZE,
+    height: BADGE_SIZE,
+    borderRadius: BADGE_SIZE / 2,
     backgroundColor: colors.primaryTint,
     alignItems: 'center',
-    justify: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.primaryTintBorder || colors.border,
   },
   badgeInner: {
-    width: BADGE - 24,
-    height: BADGE - 24,
-    borderRadius: (BADGE - 24) / 2,
+    width: BADGE_SIZE - 28,
+    height: BADGE_SIZE - 28,
+    borderRadius: (BADGE_SIZE - 28) / 2,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
     justify: 'center',
+    justifyContent: 'center', // Fix: 'justify' ko 'justifyContent' kiya
     ...shadows.card,
   },
 
+  // Icon ko perfect center karne ke liye style:
+  checkIcon: {
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+  },
+
+
+  /* Status Pill */
   texturePill: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
-    marginTop: spacing.xl,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs + 2,
     borderRadius: radii.pill,
-    backgroundColor: colors.primaryTint,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.primaryTintBorder,
+    borderColor: colors.border,
+    ...shadows.subtle,
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: colors.primary,
     marginRight: spacing.sm,
   },
+  dotActive: {
+    backgroundColor: colors.warning || '#E6A23C',
+  },
   textureText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.primary,
-    letterSpacing: 0.5,
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
 
+  /* Titles */
+  promptContainer: {
+    alignItems: 'center',
+    marginTop: spacing.xxl,
+    marginBottom: spacing.xl,
+  },
   question: {
     fontSize: 22,
     fontWeight: '800',
     color: colors.textPrimary,
     textAlign: 'center',
-    marginTop: spacing.xxxl,
-    letterSpacing: 0.2,
+    letterSpacing: -0.2,
+  },
+  subQuestion: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.md,
   },
 
+  /* Action Cards */
   cardsRow: {
     flexDirection: 'row',
-    gap: spacing.lg,
-    marginTop: spacing.xl,
+    gap: spacing.md,
     alignSelf: 'stretch',
+    justifyContent: 'center',
+  },
+  actionCard: {
+    flex: 1,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
     justify: 'center',
+    ...shadows.subtle,
+  },
+  actionCardSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryTint,
+  },
+  actionCardPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  actionCardDisabled: {
+    opacity: 0.6,
+  },
+actionIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.primaryTint,
+    // Icon ko exactly center align karne ke liye:
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+    // Cross-platform alignment adjustment:
+    overflow: 'hidden', 
+  },
+  actionIconWrapSelected: {
+    backgroundColor: colors.primary,
+  },
+  actionLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    letterSpacing: 0.5,
+  },
+  actionLabelSelected: {
+    color: colors.primary,
+  },
+  actionSubtitle: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  actionSubtitleSelected: {
+    color: colors.primary,
+    opacity: 0.8,
   },
 
+  /* Footer */
   footer: {
     alignItems: 'center',
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing.xl,
     paddingHorizontal: spacing.xxl,
   },
 });
