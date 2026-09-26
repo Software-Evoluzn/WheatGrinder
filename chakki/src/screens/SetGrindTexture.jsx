@@ -56,11 +56,11 @@ const HeaderMenu = () => {
                   pressed && { backgroundColor: colors.primaryTint },
                 ]}
               >
-                <Feather 
-                  name={item.icon} 
-                  size={18} 
-                  color={colors.primary} 
-                  style={{ marginRight: spacing.md, includeFontPadding: false }} 
+                <Feather
+                  name={item.icon}
+                  size={18}
+                  color={colors.primary}
+                  style={{ marginRight: spacing.md, includeFontPadding: false }}
                 />
                 <Text style={styles.menuItemText}>{item.label}</Text>
               </Pressable>
@@ -107,11 +107,20 @@ const SetGrindTexture = ({ navigation, route }) => {
   const grainId = route?.params?.grainId || route?.params?.grain || 'wheat';
   const cfg = getGrainConfig(grainId);
 
+  // true when opened from the Milling screen's edit chip
+  const fromMilling = !!route?.params?.fromMilling;
+
   // Grain Display Name priority
   const grainDisplayName = route?.params?.grainName || cfg?.label || grainId.toUpperCase();
 
-  // Texture level default set
-  const initialTextureLevel = route?.params?.texture ?? cfg.default ?? 5;
+  // Numeric texture level: from Milling (textureValue), or a numeric `texture`
+  // from the grain selection screen, else the grain's default.
+  const initialTextureLevel =
+    route?.params?.textureValue ??
+    (typeof route?.params?.texture === 'number' ? route.params.texture : undefined) ??
+    cfg?.default ??
+    5;
+
   const [textureLevel, setTextureLevel] = useState(initialTextureLevel);
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -148,12 +157,21 @@ const SetGrindTexture = ({ navigation, route }) => {
         throw new Error(res?.error || 'Could not send grinding level to machine');
       }
 
-      navigation.navigate('MillingControlScreen', {
+      const params = {
         grain: grainId,
         grainName: grainDisplayName,
         texture: getTextureLabel(),
         textureValue: textureLevel,
         serialNumber,
+      };
+
+      // merge: true -> if MillingControlScreen is already in the stack (edit flow),
+      // go back to it and merge the new params instead of opening a second copy.
+      // React Navigation v7: use navigation.popTo('MillingControlScreen', params, { merge: true })
+      navigation.navigate({
+        name: 'MillingControlScreen',
+        params,
+        merge: true,
       });
     } catch (e) {
       setErrorMsg(e.message);
@@ -174,11 +192,13 @@ const SetGrindTexture = ({ navigation, route }) => {
         right={<HeaderMenu />}
       />
 
-      {/* Dynamic Default Texture Pill Display */}
+      {/* Texture pill: DEFAULT on first setup, CURRENT when editing from Milling */}
       <View style={styles.texturePill}>
         <View style={styles.dot} />
         <Text style={styles.texturePillText}>
-          {sending ? 'SETTING LEVEL...' : `DEFAULT · ${getTextureLabel()}`}
+          {sending
+            ? 'SETTING LEVEL...'
+            : `${fromMilling ? 'CURRENT' : 'DEFAULT'} · ${getTextureLabel()}`}
         </Text>
       </View>
 
@@ -196,27 +216,29 @@ const SetGrindTexture = ({ navigation, route }) => {
         </View>
 
         <View style={styles.stepperRow}>
-          <IconButton 
-            name="minus" 
-            onPress={handleDecrease} 
-            variant="ghost" 
-            size={24} 
-            accessibilityLabel="Decrease texture" 
+          <IconButton
+            name="minus"
+            onPress={handleDecrease}
+            variant="ghost"
+            size={24}
+            disabled={sending}
+            accessibilityLabel="Decrease texture"
           />
           <View style={styles.segments}>
             {Array.from({ length: segments }).map((_, i) => (
-              <View 
-                key={i} 
-                style={[styles.segment, i < active && styles.segmentActive]} 
+              <View
+                key={i}
+                style={[styles.segment, i < active && styles.segmentActive]}
               />
             ))}
           </View>
-          <IconButton 
-            name="plus" 
-            onPress={handleIncrease} 
-            variant="ghost" 
-            size={24} 
-            accessibilityLabel="Increase texture" 
+          <IconButton
+            name="plus"
+            onPress={handleIncrease}
+            variant="ghost"
+            size={24}
+            disabled={sending}
+            accessibilityLabel="Increase texture"
           />
         </View>
 
@@ -313,14 +335,13 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 
-  body: { 
-    flex: 1, 
-    justify: 'center', 
-    justifyContent: 'center', 
-    paddingHorizontal: spacing.xxl 
+  body: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xxl,
   },
 
-  /* --- HERO & CIRCULAR DIAL ALIGNMENT FIXES --- */
+  /* --- HERO & CIRCULAR DIAL --- */
   hero: {
     width: HERO,
     height: HERO,
@@ -328,7 +349,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: spacing.xl,
-    position: 'relative', // Ensures absolute children center properly
+    position: 'relative',
   },
   glow: {
     position: 'absolute',
@@ -360,34 +381,33 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 2,
     borderColor: colors.primaryTintBorder || colors.border,
-    // Text ko exactly vertical aur horizontal center karne ke liye:
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
     ...shadows.card,
   },
-  valueLabel: { 
-    fontSize: 28, 
-    fontWeight: '800', 
-    color: colors.primary, 
+  valueLabel: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: colors.primary,
     letterSpacing: 1,
     textAlign: 'center',
     includeFontPadding: false,
   },
-  valueSub: { 
+  valueSub: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.textSecondary, 
+    color: colors.textSecondary,
     marginTop: 6,
     textAlign: 'center',
     includeFontPadding: false,
   },
 
-  stepperRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    marginTop: spacing.huge || spacing.xl, 
-    gap: spacing.md 
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.huge || spacing.xl,
+    gap: spacing.md,
   },
   segments: { flex: 1, flexDirection: 'row', gap: 6, alignItems: 'center' },
   segment: { flex: 1, height: 12, borderRadius: 6, backgroundColor: colors.primarySubtle || colors.border },

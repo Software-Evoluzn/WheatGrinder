@@ -51,7 +51,7 @@ const HeaderMenu = () => {
         onClose={() => setHelpOpen(false)}
         icon="help-circle"
         title="Help"
-        message="Tap START to load the grain and begin milling. Tap PAUSE to hold the process. Use the back arrow to return."
+        message="Tap START to load the grain and begin milling. Tap PAUSE to hold the process. Tap the texture chip to change the grind texture. Use the back arrow to return."
         confirmLabel="Got it"
         onConfirm={() => setHelpOpen(false)}
       />
@@ -88,18 +88,42 @@ const resolveSerialNumber = async (route) => {
 };
 
 const MillingControlScreen = ({ navigation, route }) => {
-  // Previous screens send either { grainName } or { grain }
-  const selectedGrain = route?.params?.grainName || route?.params?.grain || 'WHEAT';
-  const selectedTexture = route?.params?.texture || 'FINE';
+  // Read directly from route params (not useState) so the screen updates
+  // automatically when SetGrindTexture sends back new values.
+  const grainId = String(route?.params?.grain || 'wheat');
+  const selectedGrain = String(route?.params?.grainName || grainId);
 
-  const [processState, setProcessState] = useState(null); // null | 'START' | 'PAUSE'
+  // texture should be a label ('FINE' | 'MEDIUM' | 'COARSE'). Guard against a
+  // number being passed by mistake, which would crash .toUpperCase().
+  const rawTexture = route?.params?.texture;
+  const selectedTexture =
+    typeof rawTexture === 'string' && rawTexture ? rawTexture.toUpperCase() : 'FINE';
+  const textureValue = route?.params?.textureValue; // numeric level
+
+  // Previous screen can say the machine is already running (e.g. started from GrainConfirmation)
+  const [processState, setProcessState] = useState(route?.params?.processState ?? null); // null | 'START' | 'PAUSE'
   const [pendingAction, setPendingAction] = useState(null); // null | 'START' | 'PAUSE' (request in flight)
   const [error, setError] = useState(null); // { title, message }
 
   const sending = pendingAction !== null;
 
+  // Texture can't be changed while the machine is running or a command is in flight
+  const textureLocked = sending || processState === 'START';
+
   const handleBack = () => {
     if (navigation?.goBack) navigation.goBack();
+  };
+
+  // Opens SetGrindTexture in edit mode; it comes back here with new params on SET
+  const handleEditTexture = () => {
+    if (textureLocked) return;
+    navigation.navigate('SetGrindTexture', {
+      grain: grainId,
+      grainName: route?.params?.grainName,
+      textureValue,
+      serialNumber: route?.params?.serialNumber,
+      fromMilling: true,
+    });
   };
 
   /*
@@ -132,6 +156,7 @@ const MillingControlScreen = ({ navigation, route }) => {
       // navigation.navigate('LoadGrainToStart', {
       //   grainName: selectedGrain,
       //   texture: selectedTexture,
+      //   textureValue,
       //   serialNumber,
       // });
     } catch (e) {
@@ -209,10 +234,24 @@ const MillingControlScreen = ({ navigation, route }) => {
             <Feather name="box" size={14} color={colors.primary} style={{ marginRight: spacing.sm }} />
             <Text style={styles.configText}>{selectedGrain.toUpperCase()}</Text>
           </View>
-          <View style={styles.configChip}>
+
+          {/* Editable texture chip -> opens SetGrindTexture */}
+          <Pressable
+            onPress={handleEditTexture}
+            disabled={textureLocked}
+            accessibilityRole="button"
+            accessibilityLabel={`Texture: ${selectedTexture}. Tap to edit`}
+            accessibilityState={{ disabled: textureLocked }}
+            style={({ pressed }) => [
+              styles.configChip,
+              pressed && { opacity: 0.7 },
+              textureLocked && { opacity: 0.5 },
+            ]}
+          >
             <Feather name="sliders" size={14} color={colors.primary} style={{ marginRight: spacing.sm }} />
-            <Text style={styles.configText}>{selectedTexture.toUpperCase()}</Text>
-          </View>
+            <Text style={styles.configText}>{selectedTexture}</Text>
+            <Feather name="edit-2" size={13} color={colors.primary} style={{ marginLeft: spacing.sm }} />
+          </Pressable>
         </View>
 
         <Text style={styles.prompt}>Choose an action to control milling</Text>

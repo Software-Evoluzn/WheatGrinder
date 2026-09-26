@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Screen, MainHeader, FootNote, AppDialog } from './ui';
-import { colors, spacing, radii, shadows, typography } from './theme';
+import { colors, spacing, radii, shadows } from './theme';
 import { sendDeviceCommand, fetchRegisteredSerialNumber } from '../services/deviceApi';
 import { getGrainConfig } from '../services/grainLevels';
 
@@ -26,6 +26,16 @@ const resolveSerialNumber = async (route) => {
 
   await AsyncStorage.setItem('serial_number', res.serial_number);
   return res.serial_number;
+};
+
+// Same FINE / MEDIUM / COARSE rule used in SetGrindTexture
+const getTextureLabel = (level, cfg) => {
+  const min = cfg?.min ?? 0;
+  const max = cfg?.max ?? 10;
+  const pct = max > min ? (level - min) / (max - min) : 0;
+  if (pct <= 0.3) return 'FINE';
+  if (pct <= 0.7) return 'MEDIUM';
+  return 'COARSE';
 };
 
 const ActionCard = ({ label, icon, selected, onPress, disabled, subtitle }) => (
@@ -64,11 +74,20 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
 
   const grainConfig = getGrainConfig(grainId);
   const grainName = route?.params?.grainName || grainConfig?.label || grainId.toUpperCase();
-  const texture = route?.params?.texture ?? grainConfig?.default ?? 5;
+
+  // Numeric texture level (e.g. 5)
+  const textureLevel = Number(route?.params?.texture ?? grainConfig?.default ?? 5);
+  const textureLabel = getTextureLabel(textureLevel, grainConfig);
 
   const [selectedOption, setSelectedOption] = useState(null);
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Clear the highlighted card when the user comes back to this screen
+  useEffect(() => {
+    const unsubscribe = navigation?.addListener?.('focus', () => setSelectedOption(null));
+    return unsubscribe;
+  }, [navigation]);
 
   const handleBack = () => {
     if (navigation?.canGoBack?.()) navigation.goBack();
@@ -89,9 +108,12 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
       }
 
       navigation.navigate('MillingControlScreen', {
-        grain: grainName,
-        texture: texture,
+        grain: grainId,              // id, used by SetGrindTexture / getGrainConfig
+        grainName,                   // display name
+        texture: textureLabel,       // label string: 'FINE' | 'MEDIUM' | 'COARSE'
+        textureValue: textureLevel,  // numeric level
         serialNumber: serial,
+        processState: 'START',       // machine is already running
       });
     } catch (e) {
       setSelectedOption(null);
@@ -105,9 +127,10 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
     if (sending) return;
     setSelectedOption('texture');
     navigation.navigate('SetGrindTexture', {
-      grain: grainName,
-      grainId: grainId,
-      texture: texture,
+      grain: grainId,
+      grainId,
+      grainName,
+      textureValue: textureLevel,
       serialNumber,
     });
   };
@@ -121,21 +144,18 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
       />
 
       <View style={styles.body}>
-        {/* Animated/Polished Grain Selection Badge */}
         <View style={styles.badgeContainer}>
           <View style={styles.badgeOuter}>
             <View style={styles.badgeInner}>
-              <Feather name="check" size={35} color={colors.primary}
-              style={styles.checkIcon} />
+              <Feather name="check" size={35} color={colors.primary} style={styles.checkIcon} />
             </View>
           </View>
         </View>
 
-        {/* Dynamic Default Texture Display Pill */}
         <View style={styles.texturePill}>
           <View style={[styles.dot, sending && styles.dotActive]} />
           <Text style={styles.textureText}>
-            {sending ? 'COMMUNICATING...' : `Default Texture  •  Level ${texture}`}
+            {sending ? 'COMMUNICATING...' : `Default Texture  •  ${textureLabel} (Level ${textureLevel})`}
           </Text>
         </View>
 
@@ -146,7 +166,6 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
           </Text>
         </View>
 
-        {/* Dual Action Cards */}
         <View style={styles.cardsRow}>
           <ActionCard
             selected={selectedOption === 'start'}
@@ -218,18 +237,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
-    justify: 'center',
-    justifyContent: 'center', // Fix: 'justify' ko 'justifyContent' kiya
+    justifyContent: 'center',
     ...shadows.card,
   },
-
-  // Icon ko perfect center karne ke liye style:
   checkIcon: {
     textAlign: 'center',
     textAlignVertical: 'center',
     includeFontPadding: false,
   },
-
 
   /* Status Pill */
   texturePill: {
@@ -299,7 +314,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.border,
     alignItems: 'center',
-    justify: 'center',
+    justifyContent: 'center',
     ...shadows.subtle,
   },
   actionCardSelected: {
@@ -313,17 +328,15 @@ const styles = StyleSheet.create({
   actionCardDisabled: {
     opacity: 0.6,
   },
-actionIconWrap: {
+  actionIconWrap: {
     width: 48,
     height: 48,
     borderRadius: 24,
     backgroundColor: colors.primaryTint,
-    // Icon ko exactly center align karne ke liye:
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
-    // Cross-platform alignment adjustment:
-    overflow: 'hidden', 
+    overflow: 'hidden',
   },
   actionIconWrapSelected: {
     backgroundColor: colors.primary,
