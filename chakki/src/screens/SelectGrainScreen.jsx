@@ -210,11 +210,11 @@ const SelectGrainScreen = ({ navigation, route }) => {
           })}
         </View>
 
-        <Text style={styles.footer}>Powered by EVOLUZN</Text>
+        {/* <Text style={styles.footer}>Powered by EVOLUZN</Text> */}
       </ScrollView>
 
       <BottomActionBar>
-        <View style={styles.actions}>
+        <View style={[styles.actions , {marginTop:-10}]}>
           <SecondaryButton
             title="CLEAN STONE"
             fullWidth={false}

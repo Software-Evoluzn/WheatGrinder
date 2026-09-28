@@ -48,7 +48,7 @@ const AppHeader = ({ title, eyebrow, onBack, logoPosition = 'none', rightIcon, o
             ) : null}
           </View>
 
-          <View style={headerStyles.titleBlock}>
+          <View style={headerStyles.titleBlock``}>
             {eyebrow ? (
               <Text style={headerStyles.eyebrow} numberOfLines={1}>
                 {eyebrow}
