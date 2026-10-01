@@ -75,7 +75,9 @@ const AppNavigator = () => {
       <Stack.Screen name='VerifyOtpScreen' component={VerifyOtpScreen}/>
       <Stack.Screen name='ForgotPasswordScreen' component={ForgotPasswordScreen}/>
       <Stack.Screen name='ResetPasswordScreen' component={ResetPasswordScreen}/>
+      
 
+    
     </Stack.Navigator>
   )
 }

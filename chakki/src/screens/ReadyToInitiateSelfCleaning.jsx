@@ -161,13 +161,13 @@ const ReadyToInitiateSelfCleaning = ({ navigation, route }) => {
         await AsyncStorage.setItem('serial_number', serialNumber);
       }
       // 2. Publish the MQTT command through the backend
-      console.log('Sending selfCleaningProcess to', serialNumber);
-      const res = await sendDeviceCommand(serialNumber, 'selfCleaningProcess');
-      console.log('Publish response:', res);
+      // console.log('Sending selfCleaningProcess to', serialNumber);
+      // const res = await sendDeviceCommand(serialNumber, 'selfCleaningProcess');
+      // console.log('Publish response:', res);
 
-      if (!res?.success) {
-        throw new Error(res?.error || 'Could not send command to machine');
-      }
+      // if (!res?.success) {
+      //   throw new Error(res?.error || 'Could not send command to machine');
+      // }
 
       // 3. Only move to the next screen after a successful publish
       navigation?.navigate?.('SelfCleaning', { serialNumber });

@@ -2,6 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Easing, Modal, Pressable } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import io from 'socket.io-client';
+import IP_CONFIG from '../services/ip.json'; // Socket IP config
+
 import {
   Screen,
   MainHeader,
@@ -13,15 +16,12 @@ import {
 } from './ui';
 import { colors, spacing, typography, radii, shadows, layout } from './theme';
 
-const PROGRESS_STEP = 10;        // % added per tick
-const PROGRESS_INTERVAL_MS = 450; // how often progress advances
-const DONE_HOLD_MS = 2500;        // how long the "DONE" message shows before advancing
+const SOCKET_URL = IP_CONFIG.BASE_URL;
+const DONE_HOLD_MS = 2500;
 const NEXT_ROUTE = 'SelectGrain';
 
 /* -------------------------------------------------------------------------- */
-/*  HeaderMenu — static overflow (kebab) menu. No API / no dynamic data.       */
-/*    Purely informational — this screen has no back button, since the        */
-/*    cleaning process auto-advances and shouldn't be interrupted mid-cycle.  */
+/*  HeaderMenu                                                                */
 /* -------------------------------------------------------------------------- */
 const HeaderMenu = () => {
   const [open, setOpen] = useState(false);
@@ -85,7 +85,7 @@ const HeaderMenu = () => {
 };
 
 /* -------------------------------------------------------------------------- */
-/*  ProcessHero — layered visualization, matching CleaningHero's composition  */
+/*  ProcessHero                                                               */
 /* -------------------------------------------------------------------------- */
 const HERO = 260;
 const center = (size) => (HERO - size) / 2;
@@ -129,7 +129,7 @@ const ProcessHero = () => {
 };
 
 /* -------------------------------------------------------------------------- */
-/*  DoneHero — same ring/glow language, in the success color                  */
+/*  DoneHero                                                                  */
 /* -------------------------------------------------------------------------- */
 const DoneHero = ({ checkScale }) => (
   <View style={styles.hero}>
@@ -142,58 +142,119 @@ const DoneHero = ({ checkScale }) => (
   </View>
 );
 
-const CleaningProcessScreen = ({ navigation  , route}) => {
-
+/* -------------------------------------------------------------------------- */
+/*  Main Screen Component                                                     */
+/* -------------------------------------------------------------------------- */
+const CleaningProcessScreen = ({ navigation, route }) => {
   const { serialNumber, device } = route.params || {};
-  // --- functionality preserved exactly ---
-  const [progress, setProgress] = useState(0);
+
   const [phase, setPhase] = useState('progress'); // 'progress' | 'done'
+  const [progress, setProgress] = useState(15);
   const checkScale = useRef(new Animated.Value(0)).current;
 
-  // Advance the progress bar until it hits 100
+  // Visual Progress simulation while waiting for MQTT completion
   useEffect(() => {
-    if (phase !== 'progress') return undefined;
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        const next = Math.min(prev + PROGRESS_STEP, 100);
-        if (next >= 100) clearInterval(interval);
-        return next;
-      });
-    }, PROGRESS_INTERVAL_MS);
-    return () => clearInterval(interval);
+    if (phase !== 'progress') return;
+    const timer = setInterval(() => {
+      setProgress((prev) => (prev < 90 ? prev + 5 : prev));
+    }, 2000);
+    return () => clearInterval(timer);
   }, [phase]);
 
-  // Once progress hits 100, switch to the "done" phase
+  // Real-time Socket Listener for Direct MQTT Status
+  // Real-time Socket Listener for Dedicated Cleaning Event
+  // Real-time Socket Listener for Cleaning Completion
   useEffect(() => {
-    if (progress >= 100 && phase === 'progress') {
-      const toDone = setTimeout(() => setPhase('done'), 400);
-      return () => clearTimeout(toDone);
-    }
-    return undefined;
-  }, [progress, phase]);
+    const socket = io(SOCKET_URL, {
+      transports: ['websocket'],
+      reconnection: true,
+    });
 
-  // Pop in the checkmark, then auto-advance after a hold period
+    const normalizeSerial = (value) =>
+      String(value || '')
+        .replace(/[{}]/g, '')
+        .trim()
+        .toLowerCase();
+
+    const handleCleaningDone = (data) => {
+      console.log('⚡ Cleaning status received:', data);
+
+      const incomingId = normalizeSerial(data?.serial_number);
+      const currentId = normalizeSerial(serialNumber);
+
+      console.log('📱 Current Serial:', currentId);
+      console.log('📡 Incoming Serial:', incomingId);
+
+      // Only process cleaning_done
+      if (data?.status !== 'cleaning_done') {
+        return;
+      }
+
+      // Match device serial number
+      if (
+        !currentId ||
+        incomingId === currentId ||
+        incomingId.includes(currentId) ||
+        currentId.includes(incomingId)
+      ) {
+        console.log('✅ SELF CLEANING DONE');
+        console.log('➡️ Moving to done state...');
+
+        setProgress(100);
+        setPhase('done');
+      }
+    };
+
+    socket.on('connect', () => {
+      console.log('⚡ Socket connected:', socket.id);
+
+      // Ask backend if cleaning was already completed
+      if (serialNumber) {
+        socket.emit('check_cleaning', {
+          serial_number: serialNumber,
+        });
+      }
+    });
+
+    socket.on('cleaning_status_update', handleCleaningDone);
+
+    socket.on('connect_error', (error) => {
+      console.log('❌ Socket connection error:', error.message);
+    });
+
+    return () => {
+      console.log('🔌 Cleaning socket disconnected');
+      socket.off('cleaning_status_update', handleCleaningDone);
+      socket.disconnect();
+    };
+  }, [serialNumber]);
+  // Handle Done animation & Auto-navigation
   useEffect(() => {
     if (phase !== 'done') return undefined;
-    Animated.spring(checkScale, { toValue: 1, friction: 5, tension: 80, useNativeDriver: true }).start();
-    const advance = setTimeout(() => {
-      if (navigation?.replace) navigation.replace(NEXT_ROUTE,
-        {  
-          serialNumber: serialNumber,
-          device: device,
-        });
-      else if (navigation?.navigate) navigation.navigate(NEXT_ROUTE , 
-        {  serialNumber: serialNumber,
-          device: device,
-        });
-    }, DONE_HOLD_MS);
-    return () => clearTimeout(advance);
-  }, [phase, checkScale, navigation]);
 
+    Animated.spring(checkScale, {
+      toValue: 1,
+      friction: 5,
+      tension: 80,
+      useNativeDriver: true,
+    }).start();
+
+    const advance = setTimeout(() => {
+      const targetParams = { serialNumber, device };
+      if (navigation?.replace) {
+        navigation.replace(NEXT_ROUTE, targetParams);
+      } else if (navigation?.navigate) {
+        navigation.navigate(NEXT_ROUTE, targetParams);
+      }
+    }, DONE_HOLD_MS);
+
+    return () => clearTimeout(advance);
+  }, [phase, checkScale, navigation, serialNumber, device]);
+
+  // Done View
   if (phase === 'done') {
     return (
       <Screen background={colors.background} edges={['top', 'left', 'right', 'bottom']}>
-        {/* No back button: the cycle has just finished and is auto-advancing. */}
         <MainHeader greeting="Machine Status" title="Cleaning Process" onBack={undefined} right={<HeaderMenu />} />
 
         <View style={styles.centerContent}>
@@ -205,9 +266,9 @@ const CleaningProcessScreen = ({ navigation  , route}) => {
     );
   }
 
+  // Progress View
   return (
     <Screen background={colors.background} edges={['top', 'left', 'right', 'bottom']}>
-      {/* No back button: interrupting an in-progress cleaning cycle isn't allowed. */}
       <MainHeader greeting="Machine Status" title="Cleaning Process" onBack={undefined} right={<HeaderMenu />} />
 
       <View style={styles.content}>
@@ -228,7 +289,6 @@ const CleaningProcessScreen = ({ navigation  , route}) => {
 export default CleaningProcessScreen;
 
 const styles = StyleSheet.create({
-  // Overflow menu
   menuOverlay: {
     flex: 1,
     backgroundColor: 'transparent',
@@ -264,7 +324,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing.xxl,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'center', // Fix: typo 'justify' fixed to 'justifyContent'
   },
   centerContent: {
     flex: 1,
@@ -273,7 +333,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xxxl,
   },
 
-  // Hero visualization (shared shape language with SelfCleaningScreen)
   hero: {
     width: HERO,
     height: HERO,

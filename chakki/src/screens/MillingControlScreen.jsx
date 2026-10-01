@@ -1,13 +1,22 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, Pressable, Modal } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { StyleSheet, Text, View, Pressable, Modal, ActivityIndicator } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import io from 'socket.io-client';
+
 import { Screen, MainHeader, IconButton, StatusBadge, AppDialog } from './ui';
 import { colors, spacing, radii, shadows, typography, layout } from './theme';
 import { sendDeviceCommand, fetchRegisteredSerialNumber } from '../services/deviceApi';
+import IPCONFIG from '../services/ip.json'
 
-/* Static overflow (kebab) menu — no API / no dynamic data. */
+// Replace with your Flask-SocketIO server URL and port
+const SOCKET_URL = IPCONFIG.BASE_URL; 
+
+// Pause confirmation wait time (ms). Timeout par sirf error dikhega, PAUSE active nahi hoga.
+const PAUSE_TIMEOUT_MS = 120000; // 2 minute
+
+/* Static overflow (kebab) menu */
 const HeaderMenu = () => {
   const [open, setOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -59,12 +68,6 @@ const HeaderMenu = () => {
   );
 };
 
-/*
- * Finds the machine's serial number, in this order:
- *  1. passed from the previous screen (route param)
- *  2. saved on the phone (at registration or a previous lookup)
- *  3. fetched from the backend using the logged-in customer_id
- */
 const resolveSerialNumber = async (route) => {
   const fromRoute = route?.params?.serialNumber;
   if (fromRoute) return fromRoute;
@@ -78,7 +81,6 @@ const resolveSerialNumber = async (route) => {
   }
 
   const res = await fetchRegisteredSerialNumber(customerId);
-  console.log('Serial response:', res);
   if (!res?.success) {
     throw new Error(res?.error || 'No registered machine found');
   }
@@ -88,33 +90,75 @@ const resolveSerialNumber = async (route) => {
 };
 
 const MillingControlScreen = ({ navigation, route }) => {
-  // Read directly from route params (not useState) so the screen updates
-  // automatically when SetGrindTexture sends back new values.
   const grainId = String(route?.params?.grain || 'wheat');
   const selectedGrain = String(route?.params?.grainName || grainId);
 
-  // texture should be a label ('FINE' | 'MEDIUM' | 'COARSE'). Guard against a
-  // number being passed by mistake, which would crash .toUpperCase().
   const rawTexture = route?.params?.texture;
   const selectedTexture =
     typeof rawTexture === 'string' && rawTexture ? rawTexture.toUpperCase() : 'FINE';
-  const textureValue = route?.params?.textureValue; // numeric level
+  const textureValue = route?.params?.textureValue;
 
-  // Previous screen can say the machine is already running (e.g. started from GrainConfirmation)
   const [processState, setProcessState] = useState(route?.params?.processState ?? null); // null | 'START' | 'PAUSE'
-  const [pendingAction, setPendingAction] = useState(null); // null | 'START' | 'PAUSE' (request in flight)
-  const [error, setError] = useState(null); // { title, message }
+  const [pendingAction, setPendingAction] = useState(null); // null | 'START' | 'PAUSE'
+  const [isLoading, setIsLoading] = useState(false); // Controls the spinning progress dialog
+  const [error, setError] = useState(null);
+
+  const socketRef = useRef(null);
+  const pauseTimeoutRef = useRef(null);
+  const serialRef = useRef(null);
 
   const sending = pendingAction !== null;
+  const textureLocked = sending || isLoading;
 
-  // Texture can't be changed while the machine is running or a command is in flight
-  const textureLocked = sending || processState === 'START';
+  // Serial number pehle hi resolve kar lo, taaki doosri machine ke events ignore ho sakein
+  useEffect(() => {
+    resolveSerialNumber(route)
+      .then((sn) => { serialRef.current = sn; })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Real-time MQTT Socket.IO status listener
+  useEffect(() => {
+    const socket = io(SOCKET_URL, {
+      transports: ['websocket'],
+    });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      console.log('Connected to SocketIO server');
+    });
+
+    socket.on('connect_error', (e) => {
+      console.log('Socket error:', e.message);
+    });
+
+    // Sirf tab PAUSE active hoga jab device ka pause screen message aaye
+    socket.on('pause_status_update', (data) => {
+      console.log('Pause update:', data);
+
+      const sn = serialRef.current?.toLowerCase();
+      if (sn && data?.serial_number?.toLowerCase() !== sn) return; // doosri machine ignore
+
+      if (data?.status === 'pause_screen') {
+        clearTimeout(pauseTimeoutRef.current);
+        setIsLoading(false);
+        setProcessState('PAUSE');
+        setPendingAction(null);
+      }
+    });
+
+    return () => {
+      clearTimeout(pauseTimeoutRef.current);
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, []);
 
   const handleBack = () => {
     if (navigation?.goBack) navigation.goBack();
   };
 
-  // Opens SetGrindTexture in edit mode; it comes back here with new params on SET
   const handleEditTexture = () => {
     if (textureLocked) return;
     navigation.navigate('SetGrindTexture', {
@@ -126,16 +170,11 @@ const MillingControlScreen = ({ navigation, route }) => {
     });
   };
 
-  /*
-   * Publishes one MQTT command through the backend.
-   * Returns the serial number on success; throws with a readable message on failure.
-   */
   const publish = async (command) => {
     const serialNumber = await resolveSerialNumber(route);
 
     console.log(`Sending ${command} to`, serialNumber);
     const res = await sendDeviceCommand(serialNumber, command);
-    console.log('Publish response:', res);
 
     if (!res?.success) {
       throw new Error(res?.error || `Could not send ${command} to machine`);
@@ -143,22 +182,13 @@ const MillingControlScreen = ({ navigation, route }) => {
     return serialNumber;
   };
 
-  // START -> publish "startGrinding", then open LoadGrainToStart.
-  // Also works as "resume" when the machine is paused.
   const handleToggleStart = async () => {
-    if (sending) return;
+    if (sending || isLoading) return;
     setPendingAction('START');
 
     try {
-      const serialNumber = await publish('startGrinding');
+      await publish('startGrinding');
       setProcessState('START');
-
-      // navigation.navigate('LoadGrainToStart', {
-      //   grainName: selectedGrain,
-      //   texture: selectedTexture,
-      //   textureValue,
-      //   serialNumber,
-      // });
     } catch (e) {
       setError({ title: "Couldn't start", message: e.message });
     } finally {
@@ -166,10 +196,8 @@ const MillingControlScreen = ({ navigation, route }) => {
     }
   };
 
-  // PAUSE -> publish "pauseGrinding". Tapping again while paused only clears
-  // the highlight; use START to resume the machine.
   const handleTogglePause = async () => {
-    if (sending) return;
+    if (sending || isLoading) return;
 
     if (processState === 'PAUSE') {
       setProcessState(null);
@@ -177,13 +205,32 @@ const MillingControlScreen = ({ navigation, route }) => {
     }
 
     setPendingAction('PAUSE');
+    setIsLoading(true); // Spinner tab tak, jab tak 'pause_screen' MQTT message na aaye
+
     try {
+      const sn = await resolveSerialNumber(route);
+      serialRef.current = sn;
+
+      // Purana (stale) pause flag server par clear karo
+      socketRef.current?.emit('start_pause', { serial_number: sn });
+
       await publish('pauseGrinding');
-      setProcessState('PAUSE');
+
+      // Sirf error dikhayega, PAUSE active nahi karega
+      clearTimeout(pauseTimeoutRef.current);
+      pauseTimeoutRef.current = setTimeout(() => {
+        setIsLoading(false);
+        setPendingAction(null);
+        setError({
+          title: 'No response',
+          message: 'Machine did not confirm pause. Please try again.',
+        });
+      }, PAUSE_TIMEOUT_MS);
     } catch (e) {
-      setError({ title: "Couldn't pause", message: e.message });
-    } finally {
+      clearTimeout(pauseTimeoutRef.current);
+      setIsLoading(false);
       setPendingAction(null);
+      setError({ title: "Couldn't pause", message: e.message });
     }
   };
 
@@ -191,9 +238,9 @@ const MillingControlScreen = ({ navigation, route }) => {
     <View style={styles.controlItem}>
       <Pressable
         onPress={onPress}
-        disabled={sending}
+        disabled={sending || isLoading}
         accessibilityRole="button"
-        accessibilityState={{ selected: active, busy: sending }}
+        accessibilityState={{ selected: active, busy: sending || isLoading }}
         style={[styles.outerCircle, active ? styles.outerActive : styles.outerDefault]}
       >
         <View style={[styles.innerCircle, active && styles.innerActive]}>
@@ -205,7 +252,8 @@ const MillingControlScreen = ({ navigation, route }) => {
   );
 
   const statusLabel =
-    pendingAction === 'START' ? 'Starting'
+    isLoading ? 'Please Wait...'
+    : pendingAction === 'START' ? 'Starting'
     : pendingAction === 'PAUSE' ? 'Pausing'
     : processState === 'START' ? 'Running'
     : processState === 'PAUSE' ? 'Paused'
@@ -228,14 +276,12 @@ const MillingControlScreen = ({ navigation, route }) => {
           style={{ marginBottom: spacing.xl }}
         />
 
-        {/* Selected configuration (from route params) */}
         <View style={styles.configRow}>
           <View style={styles.configChip}>
             <Feather name="box" size={14} color={colors.primary} style={{ marginRight: spacing.sm }} />
             <Text style={styles.configText}>{selectedGrain.toUpperCase()}</Text>
           </View>
 
-          {/* Editable texture chip -> opens SetGrindTexture */}
           <Pressable
             onPress={handleEditTexture}
             disabled={textureLocked}
@@ -254,7 +300,9 @@ const MillingControlScreen = ({ navigation, route }) => {
           </Pressable>
         </View>
 
-        <Text style={styles.prompt}>Choose an action to control milling</Text>
+        <Text style={styles.prompt}>
+          {isLoading ? 'Waiting for machine response...' : 'Choose an action to control milling'}
+        </Text>
 
         <View style={styles.controlsRow}>
           <Control active={processState === 'START'} icon="play" label="START" onPress={handleToggleStart} iconNudge={4} />
@@ -262,7 +310,18 @@ const MillingControlScreen = ({ navigation, route }) => {
         </View>
       </View>
 
-      {/* Error dialog if serial lookup or MQTT publish fails */}
+      {/* Progress Dialog (Spinner Modal) */}
+      <Modal transparent visible={isLoading} animationType="fade">
+        <View style={styles.loaderOverlay}>
+          <View style={styles.loaderCard}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loaderTitle}>Please Wait</Text>
+            <Text style={styles.loaderSubtitle}>Communicating with machine...</Text>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Error dialog */}
       <AppDialog
         visible={!!error}
         onClose={() => setError(null)}
@@ -279,7 +338,6 @@ const MillingControlScreen = ({ navigation, route }) => {
 export default MillingControlScreen;
 
 const styles = StyleSheet.create({
-  // Overflow menu
   menuOverlay: { flex: 1, backgroundColor: 'transparent' },
   menuCard: {
     position: 'absolute',
@@ -298,7 +356,6 @@ const styles = StyleSheet.create({
 
   body: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xxl },
 
-  // Config chips
   configRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.huge },
   configChip: {
     flexDirection: 'row',
@@ -322,4 +379,33 @@ const styles = StyleSheet.create({
   innerActive: { backgroundColor: colors.primaryPressed },
   controlLabel: { marginTop: spacing.md, fontSize: 15, fontWeight: '800', color: colors.textMuted, letterSpacing: 1.5 },
   controlLabelActive: { color: colors.primary },
+
+  // Spinner Dialog Styles
+  loaderOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loaderCard: {
+    backgroundColor: colors.surface,
+    padding: spacing.xl,
+    borderRadius: radii.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 200,
+    ...shadows.card,
+  },
+  loaderTitle: {
+    marginTop: spacing.md,
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  loaderSubtitle: {
+    marginTop: spacing.xs,
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
 });
