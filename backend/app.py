@@ -6,7 +6,7 @@ from routes.auth import auth_bp
 from routes.products import products_bp
 from routes.grains import grains_bp
 from routes.mqtt_routes import mqtt_bp
-from mqtt_client import start_mqtt , cleaning_done_devices , CLEANING_FLAG_TTL , pause_screen_devices , PAUSE_FLAG_TTL
+from mqtt_client import start_mqtt , cleaning_done_devices , CLEANING_FLAG_TTL , pause_screen_devices , PAUSE_FLAG_TTL,device_statuses
 from init_db import init_schema
 from extensions import socketio
 from flask_socketio import emit
@@ -19,6 +19,8 @@ CORS(app)
 
 
 socketio.init_app(app, cors_allowed_origins="*", async_mode="threading")
+
+
 
 # Register Blueprints first
 app.register_blueprint(auth_bp)
@@ -43,7 +45,41 @@ def init_app():
     else:
         print("MQTT client failed to start")
         
-        
+@socketio.on("get_device_status")
+def get_device_status(data):
+    sn = ((data or {}).get("serial_number") or "").lower()
+    device_info = device_statuses.get(sn)
+
+    if device_info:
+        emit(
+            "device_status_update",
+            {
+                "serial_number": (data or {}).get("serial_number"),
+                "status": device_info["status"],
+                "raw_status": device_info["raw_status"],
+                "timestamp": device_info["timestamp"],
+            },
+            to=request.sid,
+        )
+    else:
+        # Default fallback if memory has no record yet
+        emit(
+            "device_status_update",
+            {
+                "serial_number": (data or {}).get("serial_number"),
+                "status": "offline",
+                "raw_status": "offline",
+            },
+            to=request.sid,
+        )
+    
+    
+@app.route('/', methods=['GET'])
+def home():
+    return {
+        "status": "success",
+        "message": "Thermo API is running"
+    }, 200   
         
 @socketio.on('start_pause')
 def start_pause(data):

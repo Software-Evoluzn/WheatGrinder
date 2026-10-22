@@ -15,17 +15,13 @@ global_client = None
 
 device_statuses = {}
 cleaning_done_devices = {}
-
 pause_screen_devices = {}
 PAUSE_FLAG_TTL = 60
-
-
-
 CLEANING_FLAG_TTL = 60  # seconds, isse purana flag ignore hoga
 
 
 def update_device_status(serial_number, status):
-    """DB mein is_online + last_seen update karta hai."""
+    """Asynchronously or silently update DB without blocking real-time flow."""
     try:
         cur = get_cursor()
         cur.execute(
@@ -84,6 +80,7 @@ def on_message(client, userdata, msg):
             print(f"[MQTT] No device_id for topic {msg.topic}")
             return
 
+        sn_lower = device_id.lower()
         payload_lower = payload.lower()
 
         is_cleaning_done = (
@@ -102,6 +99,36 @@ def on_message(client, userdata, msg):
             status = "cleaning_done"
         else:
             status = message_text.lower()
+            
+            
+        if status in ["offline" , "disconnected"]:
+            connectivity_state="offline"
+        else:
+            connectivity_state="online"
+            
+        
+        device_statuses[sn_lower]={
+            "status":connectivity_state,
+            "raw_status":status,
+            "timestamp":time.time(),
+        }
+        
+        update_device_status(device_id,connectivity_state)
+        
+        socketio.emit(
+            "device_status_update",
+            {
+                "serial_number":device_id,
+                 "status":connectivity_state,
+                 "raw_status":status,
+                 "message":payload
+            }
+        )
+            
+            
+            
+        # db_status = "offline" if status == "offline" else "online"
+        # update_device_status(device_id, db_status)
 
         if is_pause_screen:
             print(f"⏸️ Emitting pause_status_update for {device_id}")

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
     View,
     Text,
@@ -19,7 +19,6 @@ import IP_CONFIG from '../services/ip.json';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_BASE_URL = IP_CONFIG.BASE_URL;
-const POLL_INTERVAL_MS = 10000; // har 10 sec silent refresh
 
 const HomeScreen = ({ navigation, route }) => {
     const { isDark } = useAppTheme();
@@ -27,8 +26,9 @@ const HomeScreen = ({ navigation, route }) => {
     const [devices, setDevices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const socketRef = useRef(null);
 
-    // silent = true -> loader nahi dikhega (background refresh)
+    // Fetch user's registered devices list
     const fetchUserDevices = async (silent = false) => {
         try {
             if (!silent) setLoading(true);
@@ -43,7 +43,15 @@ const HomeScreen = ({ navigation, route }) => {
             const data = await response.json();
 
             if (response.ok) {
-                setDevices(data.devices || []);
+                const fetchedDevices = data.devices || [];
+                setDevices(fetchedDevices);
+
+                // Request real-time memory status from backend for each device immediately
+                if (socketRef.current && socketRef.current.connected) {
+                    fetchedDevices.forEach((dev) => {
+                        socketRef.current.emit('get_device_status', { serial_number: dev.serial_number });
+                    });
+                }
             }
         } catch (error) {
             console.error('Error fetching devices:', error);
@@ -53,12 +61,12 @@ const HomeScreen = ({ navigation, route }) => {
         }
     };
 
-    // 1) Pehli baar load
+    // 1. Initial Load
     useEffect(() => {
         fetchUserDevices();
     }, []);
 
-    // 2) Socket: live status + reconnect par refresh
+    // 2. Real-Time Socket setup for status updates
     useEffect(() => {
         const socket = io(API_BASE_URL, {
             transports: ['websocket'],
@@ -66,12 +74,27 @@ const HomeScreen = ({ navigation, route }) => {
             reconnectionDelay: 1000,
         });
 
-        socket.on('connect', () => fetchUserDevices(true));
+        socketRef.current = socket;
 
+        socket.on('connect', () => {
+            // Request latest in-memory statuses for all currently loaded devices on socket connect
+            setDevices((currentDevices) => {
+                currentDevices.forEach((dev) => {
+                    socket.emit('get_device_status', { serial_number: dev.serial_number });
+                });
+                return currentDevices;
+            });
+        });
+
+        // Listen for real-time status changes
         socket.on('device_status_update', ({ serial_number, status }) => {
-            setDevices((prev) =>
-                prev.map((d) =>
-                    d.serial_number === serial_number ? { ...d, status } : d
+            if (!serial_number) return;
+
+            setDevices((prevDevices) =>
+                prevDevices.map((device) =>
+                    device.serial_number.toLowerCase() === serial_number.toLowerCase()
+                        ? { ...device, status }
+                        : device
                 )
             );
         });
@@ -81,15 +104,11 @@ const HomeScreen = ({ navigation, route }) => {
         };
     }, []);
 
-    // 3) Polling backup: har 10 sec silently refresh
+    // 3. Screen focus event listener
     useEffect(() => {
-        const timer = setInterval(() => fetchUserDevices(true), POLL_INTERVAL_MS);
-        return () => clearInterval(timer);
-    }, []);
-
-    // 4) Screen par wapas aane par refresh
-    useEffect(() => {
-        const unsub = navigation?.addListener('focus', () => fetchUserDevices(true));
+        const unsub = navigation?.addListener('focus', () => {
+            fetchUserDevices(true);
+        });
         return unsub;
     }, [navigation]);
 
@@ -98,7 +117,6 @@ const HomeScreen = ({ navigation, route }) => {
         fetchUserDevices(true);
     };
 
-    // Online ho tabhi CollectionCloth par jaye, warna alert
     const handleControlDevice = (item) => {
         if (item.status !== 'online') {
             Alert.alert(
@@ -135,7 +153,7 @@ const HomeScreen = ({ navigation, route }) => {
                                 icon={isReady ? 'check-circle' : 'alert-circle'}
                             />
 
-                            {/* Real-Time Online / Offline Badge */}
+                            {/* Real-Time Socket Status Badge */}
                             <View
                                 style={[
                                     styles.statusBadge,
