@@ -16,60 +16,103 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Camera } from 'react-native-camera-kit';
 import Feather from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import IP_CONFIG from '../services/ip.json'
-
+import IP_CONFIG from '../services/ip.json';
 
 const base_url = IP_CONFIG.BASE_URL;
 
-const parseQR = (raw) => {
-  if (!raw) return null;
-  const result = {};
+// =====================================================================
+// STEP 1: QR PARSER
+// QR ka text aisa hota hai:
+//   Product Name : Softel Multi Grain Millet Mill
+//   Device ID : softelF0C099
+//   MAC ID : 8C:4C:AD:F0:C0:99
+//
+// Har label ke baad ka value tab tak uthate hain jab tak
+// agla label na aa jaye (ya text khatam ho jaye).
+// =====================================================================
 
-  const patterns = [
-    { key: 'productName', regex: /Device Name\s*:\s*(.*?)\s*(?=Model No\s*:|$)/i },
-    { key: 'modelNo', regex: /Model No\s*:\s*(.*?)\s*(?=Serial No\s*:|$)/i },
-    { key: 'serialNo', regex: /Serial No\s*:\s*(.*?)\s*(?=MAC ID\s*:|$)/i },
-    { key: 'macId', regex: /MAC ID\s*:\s*(.*?)\s*(?=MDF By\s*:|$)/i },
-  ];
+// Saare labels jo QR mein aa sakte hain (naya + purana format dono)
+const ALL_LABELS =
+  'Product Name|Device Name|Device ID|Serial No|Model No|MAC ID|MDF By';
 
-  patterns.forEach(({ key, regex }) => {
-    const match = raw.match(regex);
-    if (match) {
-      result[key] = match[1].trim();
-    }
-  });
-
-  console.log("PARSED QR DATA: ", result)
-
-  return Object.keys(result).length > 0 ? result : null;
+// Ek label ka value nikalne wala helper
+// labelNames example: 'Device ID|Serial No'  (jo bhi mile wo le lo)
+const getValue = (raw, labelNames) => {
+  const regex = new RegExp(
+    `(?:${labelNames})\\s*:\\s*([\\s\\S]*?)\\s*(?=(?:${ALL_LABELS})\\s*:|$)`,
+    'i'
+  );
+  const match = raw.match(regex);
+  return match ? match[1].trim() : '';
 };
 
+const parseQR = (raw) => {
+  if (!raw) return null;
+
+  const result = {
+    productName: getValue(raw, 'Product Name|Device Name'),
+    serialNo: getValue(raw, 'Device ID|Serial No'), // Device ID hi serial number hai
+    macId: getValue(raw, 'MAC ID'),
+  };
+
+  console.log('PARSED QR DATA: ', result);
+
+  // Device ID nahi mila to QR galat hai
+  if (!result.serialNo) return null;
+
+  return result;
+};
+
+// =====================================================================
+// STEP 2: DATE HELPERS
+// =====================================================================
+
+// Screen par dikhane ke liye: DD-MM-YYYY
+const formatDate = (date) => {
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+};
+
+// Flask / MySQL ko bhejne ke liye: YYYY-MM-DD
+const formatDateForAPI = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// =====================================================================
+// STEP 3: SCREEN
+// =====================================================================
 const ProductRegistrationScreen = ({ navigation }) => {
+  // 'scan' ya 'manual'
   const [mode, setMode] = useState('scan');
   const [isCameraActive, setIsCameraActive] = useState(false);
 
-  // Form Fields
-  const [productName, setProductName] = useState('')
+  // Form fields
+  const [productName, setProductName] = useState('');
   const [serialNo, setSerialNo] = useState('');
-  const [modelNo, setModelNo] = useState('');
   const [macId, setMacId] = useState('');
   const [customerId, setCustomerId] = useState(null);
 
-  // Date State
+  // Date
   const [purchaseDate, setPurchaseDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Scan line animation
   const scanAnimation = useRef(new Animated.Value(0)).current;
 
-  // Retrieve stored customer_id when screen mounts
+  // Camera ek hi QR ko baar-baar read karta hai, ye usse rokta hai
+  const hasScanned = useRef(false);
+
+  // ---- Screen khulte hi customer_id nikalo ----
   useEffect(() => {
     const fetchCustomerId = async () => {
       try {
         const storedId = await AsyncStorage.getItem('customer_id');
-        if (storedId) {
-          setCustomerId(storedId);
-        }
+        if (storedId) setCustomerId(storedId);
       } catch (error) {
         console.error('Failed to load customer ID', error);
       }
@@ -77,6 +120,7 @@ const ProductRegistrationScreen = ({ navigation }) => {
     fetchCustomerId();
   }, []);
 
+  // ---- Camera on ho to scan line chalao ----
   useEffect(() => {
     if (isCameraActive) {
       Animated.loop(
@@ -96,43 +140,43 @@ const ProductRegistrationScreen = ({ navigation }) => {
     }
   }, [isCameraActive]);
 
+  // ---- Camera start karna ----
+  const startScanner = () => {
+    hasScanned.current = false; // naya scan allow karo
+    setIsCameraActive(true);
+  };
+
+  // ---- QR scan hone par ----
   const onReadCode = (event) => {
+    if (hasScanned.current) return; // pehle hi scan ho chuka hai
+
     const qrData = event.nativeEvent.codeStringValue;
+    console.log('QR Scanned: ', qrData);
 
-    console.log("QR Scanned: ", qrData)
-
-    if (!qrData) {
-      Alert.alert('Invalid QR', 'QR code data is empty.');
-      return;
-    }
-
+    if (!qrData) return;
 
     const parsed = parseQR(qrData);
 
-    console.log("PARSED DATA:", parsed);
-
     if (!parsed) {
-      Alert.alert(
-        'Invalid QR',
-        'QR Code format is not valid.'
-      );
+      Alert.alert('Invalid QR', 'QR Code format is not valid.');
       return;
     }
 
-    if (parsed) {
-      if (parsed.productName) setProductName(parsed.productName);
-      if (parsed.serialNo) setSerialNo(parsed.serialNo);
-      if (parsed.modelNo) setModelNo(parsed.modelNo);
-      if (parsed.macId) setMacId(parsed.macId);
-      setIsCameraActive(false);
-      Alert.alert('Success', 'QR Code scanned successfully!');
-    } else {
-      Alert.alert('Invalid QR', 'Could not parse QR details.');
-    }
+    hasScanned.current = true;
+
+    // Form mein data bharo
+    setProductName(parsed.productName);
+    setSerialNo(parsed.serialNo);
+    setMacId(parsed.macId);
+
+    setIsCameraActive(false);
+    Alert.alert('Success', 'QR Code scanned successfully!');
   };
 
+  // ---- Register button dabane par ----
   const handleRegister = async () => {
-    if (!serialNo.trim() || !modelNo.trim() || !macId.trim()) {
+    // Model No required nahi hai (naye QR mein nahi aata)
+    if (!productName.trim() || !serialNo.trim() || !macId.trim()) {
       Alert.alert('Validation Error', 'Please complete all product fields.');
       return;
     }
@@ -145,14 +189,11 @@ const ProductRegistrationScreen = ({ navigation }) => {
     try {
       const response = await fetch(`${base_url}/register-product`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customer_id: customerId,
           product_name: productName,
-          serial_number: serialNo,
-          model_number: modelNo,
+          serial_number: serialNo, // Device ID
           mac_id: macId,
           purchase_date: formatDateForAPI(purchaseDate),
         }),
@@ -160,53 +201,42 @@ const ProductRegistrationScreen = ({ navigation }) => {
 
       const data = await response.json();
 
-      if(response.status === 409){
-        Alert.alert('Device Already Registered' ,
+      if (response.status === 409) {
+        // Device pehle se registered hai
+        Alert.alert(
+          'Device Already Registered',
           data.error || 'This device is already registered.'
-        )
-      }
+        );
+      } else if (response.ok) {
 
-      if (response.ok) {
+        
+        // Success
         Alert.alert(
           'Success',
           data.message || 'Product Registered Successfully',
-          [
-            {
-              text: 'OK',
-              onPress: () => navigation?.goBack(),
-            },
-          ]
+          [{ text: 'OK', onPress: () => navigation?.goBack() }]
         );
       } else {
+        // Baaki errors
         Alert.alert('Registration Failed', data.error || 'Something went wrong.');
       }
     } catch (error) {
       console.error('Registration Error:', error);
-      Alert.alert('Network Error', 'Unable to connect to the server. Please try again.');
+      Alert.alert(
+        'Network Error',
+        'Unable to connect to the server. Please try again.'
+      );
     }
   };
 
-  // Helper function to format date for display on UI (DD-MM-YYYY)
-  const formatDate = (date) => {
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    return `${day}-${month}-${year}`;
-  };
-
-  // Helper function to format date as YYYY-MM-DD for Flask/MySQL
-  const formatDateForAPI = (date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
+  // ===================================================================
+  // UI
+  // ===================================================================
   return (
     <SafeAreaView style={styles.safeContainer}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* Top Header Bar */}
+      {/* Header */}
       <View style={styles.headerBar}>
         <TouchableOpacity
           style={styles.backButton}
@@ -219,19 +249,15 @@ const ProductRegistrationScreen = ({ navigation }) => {
         <View style={styles.headerRightPlaceholder} />
       </View>
 
-      {/* Main Scroll Content */}
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Segmented Control Switcher */}
+        {/* Scan QR / Manual Entry switch */}
         <View style={styles.segmentedControl}>
           <TouchableOpacity
-            style={[
-              styles.segmentTab,
-              mode === 'scan' && styles.segmentTabActive,
-            ]}
+            style={[styles.segmentTab, mode === 'scan' && styles.segmentTabActive]}
             activeOpacity={0.8}
             onPress={() => {
               setMode('scan');
@@ -244,20 +270,14 @@ const ProductRegistrationScreen = ({ navigation }) => {
               color={mode === 'scan' ? '#522D70' : '#64748B'}
             />
             <Text
-              style={[
-                styles.segmentText,
-                mode === 'scan' && styles.segmentTextActive,
-              ]}
+              style={[styles.segmentText, mode === 'scan' && styles.segmentTextActive]}
             >
               Scan QR
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[
-              styles.segmentTab,
-              mode === 'manual' && styles.segmentTabActive,
-            ]}
+            style={[styles.segmentTab, mode === 'manual' && styles.segmentTabActive]}
             activeOpacity={0.8}
             onPress={() => {
               setMode('manual');
@@ -280,7 +300,7 @@ const ProductRegistrationScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {/* QR Viewfinder Card */}
+        {/* QR Scanner */}
         {mode === 'scan' && (
           <View style={styles.scannerContainer}>
             {isCameraActive ? (
@@ -307,7 +327,7 @@ const ProductRegistrationScreen = ({ navigation }) => {
               <TouchableOpacity
                 style={styles.scannerPlaceholder}
                 activeOpacity={0.9}
-                onPress={() => setIsCameraActive(true)}
+                onPress={startScanner}
               >
                 <View style={styles.cameraIconCircle}>
                   <Feather name="camera" size={26} color="#522D70" />
@@ -321,10 +341,9 @@ const ProductRegistrationScreen = ({ navigation }) => {
           </View>
         )}
 
-        {/* Input Form Fields */}
+        {/* Form */}
         <View style={styles.formContainer}>
           <Text style={styles.sectionHeader}>PRODUCT DETAILS</Text>
-
 
           {/* Product Name */}
           <View style={styles.inputGroup}>
@@ -338,13 +357,11 @@ const ProductRegistrationScreen = ({ navigation }) => {
                 placeholderTextColor="#94A3B8"
                 editable={mode === 'manual'}
               />
-              {mode === 'scan' && (
-                <Feather name="lock" size={16} color="#94A3B8" />
-              )}
+              {mode === 'scan' && <Feather name="lock" size={16} color="#94A3B8" />}
             </View>
           </View>
 
-          {/* Serial Number */}
+          {/* Serial Number (Device ID) */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Serial Number</Text>
             <View style={styles.inputWrapper}>
@@ -356,27 +373,7 @@ const ProductRegistrationScreen = ({ navigation }) => {
                 placeholderTextColor="#94A3B8"
                 editable={mode === 'manual'}
               />
-              {mode === 'scan' && (
-                <Feather name="lock" size={16} color="#94A3B8" />
-              )}
-            </View>
-          </View>
-
-          {/* Model Number */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Model Number</Text>
-            <View style={styles.inputWrapper}>
-              <TextInput
-                style={styles.textInput}
-                value={modelNo}
-                onChangeText={setModelNo}
-                placeholder="MODEL-XXXX"
-                placeholderTextColor="#94A3B8"
-                editable={mode === 'manual'}
-              />
-              {mode === 'scan' && (
-                <Feather name="lock" size={16} color="#94A3B8" />
-              )}
+              {mode === 'scan' && <Feather name="lock" size={16} color="#94A3B8" />}
             </View>
           </View>
 
@@ -392,9 +389,7 @@ const ProductRegistrationScreen = ({ navigation }) => {
                 placeholderTextColor="#94A3B8"
                 editable={mode === 'manual'}
               />
-              {mode === 'scan' && (
-                <Feather name="lock" size={16} color="#94A3B8" />
-              )}
+              {mode === 'scan' && <Feather name="lock" size={16} color="#94A3B8" />}
             </View>
           </View>
 
@@ -427,7 +422,7 @@ const ProductRegistrationScreen = ({ navigation }) => {
         <Text style={styles.footerBranding}>POWERED BY EVOLUZN</Text>
       </ScrollView>
 
-      {/* Sticky Bottom Action Bar */}
+      {/* Bottom Register button */}
       <View style={styles.bottomActionBar}>
         <TouchableOpacity
           style={styles.primaryButton}
@@ -444,6 +439,9 @@ const ProductRegistrationScreen = ({ navigation }) => {
 
 export default ProductRegistrationScreen;
 
+// =====================================================================
+// STYLES (same as before, koi change nahi)
+// =====================================================================
 const styles = StyleSheet.create({
   safeContainer: {
     flex: 1,

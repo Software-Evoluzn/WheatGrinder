@@ -104,6 +104,9 @@ const StoneHero = () => {
 
   return (
     <View style={styles.hero}>
+
+      <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
+
       <Animated.View style={[styles.glow, { transform: [{ scale: glowScale }], opacity: glowOpacity }]} />
       <View style={styles.ringStatic} />
       <View style={styles.ringArc} />
@@ -135,6 +138,7 @@ const CleanStoneChoiceScreen = ({ navigation, route }) => {
   return (
     <Screen background={colors.background}>
       {/* Header: back + greeting/title (Home style) + static overflow menu. */}
+        <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
       <MainHeader
         greeting="Machine Status"
         title="Clean Stone"

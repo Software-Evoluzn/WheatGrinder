@@ -6,7 +6,7 @@ import { Screen, MainHeader, FootNote, AppDialog } from './ui';
 import { colors, spacing, radii, shadows } from './theme';
 import { sendDeviceCommand, fetchRegisteredSerialNumber } from '../services/deviceApi';
 import { getGrainConfig } from '../services/grainLevels';
-
+import DeviceOfflineGuard from '../components/DeviceOfflineGuard'; 
 const resolveSerialNumber = async (route) => {
   const fromRoute = route?.params?.serialNumber;
   if (fromRoute) return fromRoute;
@@ -137,6 +137,8 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
 
   return (
     <Screen background={colors.background}>
+         <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
+
       <MainHeader
         greeting="Machine Setup"
         title={grainName.toUpperCase()}

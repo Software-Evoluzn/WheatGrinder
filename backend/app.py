@@ -4,6 +4,7 @@ from flask_socketio import SocketIO
 
 from routes.auth import auth_bp
 from routes.products import products_bp
+from database import get_cursor, get_db
 from routes.grains import grains_bp
 from routes.mqtt_routes import mqtt_bp
 from mqtt_client import start_mqtt , cleaning_done_devices , CLEANING_FLAG_TTL , pause_screen_devices , PAUSE_FLAG_TTL,device_statuses
@@ -47,14 +48,17 @@ def init_app():
         
 @socketio.on("get_device_status")
 def get_device_status(data):
-    sn = ((data or {}).get("serial_number") or "").lower()
+    sn = ((data or {}).get("serial_number") or "").strip().lower()
+    original_sn = (data or {}).get("serial_number")
+    print("sejal want to see the data here : " , sn , original_sn)
     device_info = device_statuses.get(sn)
 
     if device_info:
+        print("sejal come oin device info : " , device_info)
         emit(
             "device_status_update",
             {
-                "serial_number": (data or {}).get("serial_number"),
+                "serial_number": original_sn,
                 "status": device_info["status"],
                 "raw_status": device_info["raw_status"],
                 "timestamp": device_info["timestamp"],
@@ -62,16 +66,46 @@ def get_device_status(data):
             to=request.sid,
         )
     else:
-        # Default fallback if memory has no record yet
-        emit(
-            "device_status_update",
-            {
-                "serial_number": (data or {}).get("serial_number"),
-                "status": "offline",
-                "raw_status": "offline",
-            },
-            to=request.sid,
-        )
+        # Fallback to Database if not found in memory
+        print("sejal fall back to database")
+        try:
+            cur = get_cursor()
+            cur.execute(
+                "SELECT is_online FROM product_registrations WHERE LOWER(serial_number) = %s",
+                (sn,),
+            )
+            row = cur.fetchone()
+            
+            db_status = "online" if row and row.get("is_online") == 1 else "offline"
+            print("sejal database status : " , db_status)
+            
+            # Cache in memory
+            device_statuses[sn] = {
+                "status": db_status,
+                "raw_status": db_status,
+                "timestamp": time.time(),
+            }
+            
+            emit(
+                "device_status_update",
+                {
+                    "serial_number": original_sn,
+                    "status": db_status,
+                    "raw_status": db_status,
+                },
+                to=request.sid,
+            )
+        except Exception as e:
+            print(f"[Socket] DB status lookup failed: {e}")
+            emit(
+                "device_status_update",
+                {
+                    "serial_number": original_sn,
+                    "status": "offline",
+                    "raw_status": "offline",
+                },
+                to=request.sid,
+            )
     
     
 @app.route('/', methods=['GET'])

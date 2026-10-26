@@ -29,42 +29,42 @@ const HomeScreen = ({ navigation, route }) => {
     const socketRef = useRef(null);
 
     // Fetch user's registered devices list
-    const fetchUserDevices = async (silent = false) => {
-        try {
-            if (!silent) setLoading(true);
+    // HomeScreen.js me fetchUserDevices update karein
+const fetchUserDevices = async (silent = false) => {
+    try {
+        if (!silent) setLoading(true);
 
-            let customerId = route?.params?.customer_id;
-            if (!customerId) {
-                customerId = await AsyncStorage.getItem('customer_id');
-            }
-            if (!customerId) return;
-
-            const response = await fetch(`${API_BASE_URL}/customer-products/${customerId}`);
-            const data = await response.json();
-
-            if (response.ok) {
-                const fetchedDevices = data.devices || [];
-                setDevices(fetchedDevices);
-
-                // Request real-time memory status from backend for each device immediately
-                if (socketRef.current && socketRef.current.connected) {
-                    fetchedDevices.forEach((dev) => {
-                        socketRef.current.emit('get_device_status', { serial_number: dev.serial_number });
-                    });
-                }
-            }
-        } catch (error) {
-            console.error('Error fetching devices:', error);
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
+        let customerId = route?.params?.customer_id;
+        if (!customerId) {
+            customerId = await AsyncStorage.getItem('customer_id');
         }
-    };
+        if (!customerId) return;
 
-    // 1. Initial Load
-    useEffect(() => {
-        fetchUserDevices();
-    }, []);
+        const response = await fetch(`${API_BASE_URL}/customer-products/${customerId}`);
+        const data = await response.json();
+
+        if (response.ok) {
+            const fetchedDevices = (data.devices || []).map(dev => ({
+                ...dev,
+                // Make sure is_online from DB maps correctly on initial load
+                status: dev.is_online === 1 || dev.status === 'online' ? 'online' : 'offline'
+            }));
+            
+            setDevices(fetchedDevices);
+
+            if (socketRef.current && socketRef.current.connected) {
+                fetchedDevices.forEach((dev) => {
+                    socketRef.current.emit('get_device_status', { serial_number: dev.serial_number });
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching devices:', error);
+    } finally {
+        setLoading(false);
+        setRefreshing(false);
+    }
+};
 
     // 2. Real-Time Socket setup for status updates
     useEffect(() => {
@@ -89,6 +89,7 @@ const HomeScreen = ({ navigation, route }) => {
         // Listen for real-time status changes
         socket.on('device_status_update', ({ serial_number, status }) => {
             if (!serial_number) return;
+             if (status !== 'online' && status !== 'offline') return; // ignore raw messages
 
             setDevices((prevDevices) =>
                 prevDevices.map((device) =>

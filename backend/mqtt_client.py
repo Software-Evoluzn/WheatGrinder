@@ -154,14 +154,14 @@ def on_message(client, userdata, msg):
                 },
             )
 
-        socketio.emit(
-            "device_status_update",
-            {
-                "serial_number": device_id,
-                "status": status,
-                "message": payload,
-            },
-        )
+        # socketio.emit(
+        #     "device_status_update",
+        #     {
+        #         "serial_number": device_id,
+        #         "status": status,
+        #         "message": payload,
+        #     },
+        # )
 
     except Exception as e:
         print(f"MQTT message processing error: {e}")

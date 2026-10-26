@@ -14,6 +14,7 @@ import {
 } from './ui';
 import { colors, spacing, radii, shadows, typography, layout } from './theme';
 import { sendDeviceCommand, fetchRegisteredSerialNumber } from '../services/deviceApi';
+import DeviceOfflineGuard from '../components/DeviceOfflineGuard'; 
 
 import { getGrainConfig } from '../services/grainLevels';
 
@@ -168,6 +169,7 @@ const SelectGrainScreen = ({ navigation, route }) => {
   };
   return (
     <Screen background={colors.background}>
+         <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
       <MainHeader
         greeting="Machine Setup"
         title="Select Grain"

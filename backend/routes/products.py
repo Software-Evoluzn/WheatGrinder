@@ -1,8 +1,45 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime, timedelta, date
 from database import get_cursor, get_db
+from mqtt_client import publish_message, subscribe_to_device
 
 products_bp = Blueprint('products', __name__)
+
+
+# ---------------------------------------------------------------
+# HELPER: DB se customer ka naam nikalo aur device ko MQTT se bhejo
+# Payload format (device doc ke hisaab se):  registerName:NAME
+# ---------------------------------------------------------------
+def send_register_name(serial_number, customer_id):
+    """
+    Returns True agar MQTT publish ho gaya, warna False.
+    Yahan koi bhi error aaye to register API fail nahi hona chahiye
+    (product DB mein pehle hi save ho chuka hai).
+    """
+    try:
+        print("here enter sejal")
+        cur = get_cursor()
+        # NOTE: table/column name apne DB ke hisaab se change karo
+        cur.execute(
+    "SELECT name FROM customers WHERE customer_id = %s LIMIT 1",
+    (customer_id,)
+)
+        row = cur.fetchone()
+
+        name = ((row or {}).get("name") or "").strip()
+        if not name:
+            print(f"[REGISTER-NAME] No name found for customer {customer_id}")
+            return False
+
+        topic   = f"{serial_number}/control"
+        message = f"registeredName:{name}"
+
+        subscribe_to_device(serial_number)
+        return bool(publish_message(topic, message))
+
+    except Exception as e:
+        print(f"[REGISTER-NAME] ERROR: {e}")
+        return False
 
 
 # ---------------------------------------------------------------
@@ -14,13 +51,16 @@ def register_product():
         data = request.get_json(silent=True) or {}
         customer_id   = data.get("customer_id")
         product_name  = (data.get("product_name") or "").strip()
-        serial_number = (data.get("serial_number") or "").strip()
+
+        # Accept device_id OR serial_number from frontend for backward compatibility
+        serial_number = (data.get("device_id") or data.get("serial_number") or "").strip()
         model_number  = (data.get("model_number") or "").strip()
         mac_id        = (data.get("mac_id") or "").strip()
         purchase_date = data.get("purchase_date")
 
+        # Required field validation check
         if not customer_id or not serial_number or not purchase_date:
-            return jsonify({"error": "Missing required fields."}), 400
+            return jsonify({"error": "Missing required fields (customer_id, device_id/serial_number, purchase_date)."}), 400
 
         cur = get_cursor()
         cur.execute(
@@ -45,11 +85,16 @@ def register_product():
         ))
         get_db().commit()
 
+        # DB save ho gaya -> ab device ko registerName:NAME bhejo
+        mqtt_sent = send_register_name(serial_number, customer_id)
+
         return jsonify({
             "message": "Product Registered Successfully",
             "serial_number": serial_number,
+            "device_id": serial_number,
             "purchase_date": str(purchase_date_obj.date()),
-            "warranty_expiry": str(warranty_expiry.date())
+            "warranty_expiry": str(warranty_expiry.date()),
+            "mqtt_published": mqtt_sent
         }), 200
 
     except Exception as e:
@@ -59,7 +104,6 @@ def register_product():
 
 # ---------------------------------------------------------------
 # GET LATEST REGISTERED SERIAL NUMBER FOR A CUSTOMER
-# (used by the app before sending MQTT commands)
 # ---------------------------------------------------------------
 @products_bp.route('/api/products/get-serial', methods=['GET'])
 def get_serial():
@@ -116,8 +160,7 @@ def get_customer_products(customer_id):
             dev["warranty_expiry"] = str(dev["warranty_expiry"])
             dev["is_active"] = date.fromisoformat(dev["warranty_expiry"]) >= today
             dev["status"] = "online" if dev.get("is_online") else "offline"
-            
-            
+
             if dev.get("last_seen"):
                 dev["last_seen"] = str(dev["last_seen"])
             else:

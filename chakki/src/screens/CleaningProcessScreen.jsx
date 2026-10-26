@@ -4,6 +4,8 @@ import Feather from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import io from 'socket.io-client';
 import IP_CONFIG from '../services/ip.json'; // Socket IP config
+import DeviceOfflineGuard from '../components/DeviceOfflineGuard';
+ 
 
 import {
   Screen,
@@ -255,6 +257,7 @@ const CleaningProcessScreen = ({ navigation, route }) => {
   if (phase === 'done') {
     return (
       <Screen background={colors.background} edges={['top', 'left', 'right', 'bottom']}>
+        
         <MainHeader greeting="Machine Status" title="Cleaning Process" onBack={undefined} right={<HeaderMenu />} />
 
         <View style={styles.centerContent}>

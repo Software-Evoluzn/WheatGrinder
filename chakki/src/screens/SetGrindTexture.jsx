@@ -163,6 +163,7 @@ const SetGrindTexture = ({ navigation, route }) => {
         texture: getTextureLabel(),
         textureValue: textureLevel,
         serialNumber,
+        processState: route?.params?.processState
       };
 
       // merge: true -> if MillingControlScreen is already in the stack (edit flow),

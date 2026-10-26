@@ -21,6 +21,7 @@ import {
 import { colors, spacing, radii, typography, shadows, layout } from './theme';
 
 import { sendDeviceCommand } from '../services/deviceApi';
+import DeviceOfflineGuard from '../components/DeviceOfflineGuard';
 
 /* -------------------------------------------------------------------------- */
 /*  HeaderMenu — static overflow (kebab) menu. No API / no dynamic data.       */
@@ -177,6 +178,8 @@ const SelfCleaningScreen = ({ navigation, route }) => {
 
   return (
     <Screen background={colors.background}>
+
+            <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
       {/* Header: back + greeting/title (Home style) + static overflow menu. */}
       <MainHeader
         greeting="Machine Status"

@@ -21,22 +21,24 @@ const LoginScreen = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // ✅ Loading state
+  // Auto Login checkbox
+  const [autoLogin, setAutoLogin] = useState(false);
+
+  // Loading state
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if(!email.trim()) {
+    if (!email.trim()) {
       Alert.alert('Error', 'Please enter email');
       return;
     }
 
-    if(!password.trim()) {
+    if (!password.trim()) {
       Alert.alert('Error', 'Please enter password');
       return;
     }
 
     try {
-
       setLoading(true);
 
       console.log('LOGIN REQUEST:', {
@@ -44,58 +46,40 @@ const LoginScreen = ({ navigation }) => {
       });
 
       // Call Flask API
-      const data = await loginUser(
-        email,
-        password
-      );
+      const data = await loginUser(email, password);
 
       console.log('Logged in user:', data);
 
-      // ✅ ADD THIS: Save customer_id to local storage securely
+      // customer_id local storage mein save karo
       if (data.customer_id) {
         await AsyncStorage.setItem('customer_id', String(data.customer_id));
       }
 
+      // Auto Login: checkbox on hai to flag save karo, warna hata do
+      if (autoLogin) {
+        await AsyncStorage.setItem('auto_login', 'true');
+      } else {
+        await AsyncStorage.removeItem('auto_login');
+      }
+
       // Login successful
-      Alert.alert(
-        'Success',
-        data.message || 'Login successful',
-        [
-          {
-            text: 'OK',
-
-            onPress: () => {
-
-              navigation.replace('Main' , {
-                customer_id: data.customer_id
-              });
-
-            },
+      Alert.alert('Success', data.message || 'Login successful', [
+        {
+          text: 'OK',
+          onPress: () => {
+            navigation.replace('Main', {
+              customer_id: data.customer_id,
+            });
           },
-        ]
-      );
-
-
-
+        },
+      ]);
     } catch (error) {
+      console.log('LOGIN ERROR:', error);
 
-      console.log(
-        'LOGIN ERROR:',
-        error
-      );
-
-      Alert.alert(
-        'Login Failed',
-        error.message || 'Unable to login'
-      );
-
-
+      Alert.alert('Login Failed', error.message || 'Unable to login');
     } finally {
       setLoading(false);
     }
-
-
-
   };
 
   return (
@@ -109,7 +93,6 @@ const LoginScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.mainCard}>
-
           {/* Top White Section */}
           <View style={styles.topSection}>
             <Image
@@ -121,13 +104,9 @@ const LoginScreen = ({ navigation }) => {
 
           {/* Purple Bottom Section */}
           <View style={styles.bottomSection}>
-
             {/* Login Card */}
             <View style={styles.loginCard}>
-
-              <Text style={styles.loginTitle}>
-                Login
-              </Text>
+              <Text style={styles.loginTitle}>Login</Text>
 
               {/* Email */}
               <TextInput
@@ -151,9 +130,7 @@ const LoginScreen = ({ navigation }) => {
                   secureTextEntry={!showPassword}
                 />
 
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                >
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                   <Feather
                     name={showPassword ? 'eye-off' : 'eye'}
                     size={20}
@@ -162,15 +139,28 @@ const LoginScreen = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
 
-              {/* Forgot Password */}
-              <TouchableOpacity
-                style={styles.forgotContainer}
-                onPress={() => navigation.navigate('ForgotPasswordScreen')}
-              >
-                <Text style={styles.forgotText}>
-                  Forgot Password ?
-                </Text>
-              </TouchableOpacity>
+              {/* Auto Login checkbox + Forgot Password */}
+              <View style={styles.optionsRow}>
+                <TouchableOpacity
+                  style={styles.checkboxRow}
+                  onPress={() => setAutoLogin(!autoLogin)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Feather
+                    name={autoLogin ? 'check-square' : 'square'}
+                    size={20}
+                    color="#55327A"
+                  />
+                  <Text style={styles.checkboxLabel}>Auto Login</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('ForgotPasswordScreen')}
+                >
+                  <Text style={styles.forgotText}>Forgot Password ?</Text>
+                </TouchableOpacity>
+              </View>
 
               {/* Login Button */}
               <TouchableOpacity
@@ -183,34 +173,23 @@ const LoginScreen = ({ navigation }) => {
                   {loading ? 'Logging in...' : 'Login'}
                 </Text>
               </TouchableOpacity>
-
             </View>
 
             {/* Register */}
             <View style={styles.registerContainer}>
-
-              <Text style={styles.registerText}>
-                Not Registered?
-              </Text>
+              <Text style={styles.registerText}>Not Registered?</Text>
 
               <TouchableOpacity
                 style={styles.registerButton}
                 onPress={() => navigation.navigate('Register')}
               >
-                <Text style={styles.registerButtonText}>
-                  Register
-                </Text>
+                <Text style={styles.registerButtonText}>Register</Text>
               </TouchableOpacity>
-
             </View>
 
             {/* Powered By */}
-            <Text style={styles.poweredText}>
-              Powered by EVOLUZN
-            </Text>
-
+            <Text style={styles.poweredText}>Powered by EVOLUZN</Text>
           </View>
-
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -249,16 +228,12 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
 
-  /*
-   * WHITE TOP SECTION
-   */
+  /* WHITE TOP SECTION */
   topSection: {
     height: 500,
     backgroundColor: '#FFFFFF',
-
     justifyContent: 'flex-start',
     alignItems: 'center',
-
     paddingTop: 90,
   },
 
@@ -267,35 +242,25 @@ const styles = StyleSheet.create({
     height: 100,
   },
 
-  /*
-   * PURPLE SECTION
-   */
+  /* PURPLE SECTION */
   bottomSection: {
     flex: 1,
     minHeight: 300,
     backgroundColor: '#55327A',
-
     alignItems: 'center',
     position: 'relative',
-
     paddingTop: 0,
   },
 
-  /*
-   * LOGIN CARD
-   */
+  /* LOGIN CARD */
   loginCard: {
     width: '90%',
     maxWidth: 320,
-
     backgroundColor: '#FFFFFF',
-
     borderRadius: 20,
-
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 24,
-
     marginTop: -245,
 
     shadowColor: '#000',
@@ -313,153 +278,114 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: '#111111',
     textAlign: 'center',
-
     marginBottom: 26,
   },
 
-  /*
-   * EMAIL INPUT
-   */
+  /* EMAIL INPUT */
   input: {
     height: 50,
-
     backgroundColor: '#E9E9E9',
-
     borderRadius: 8,
-
     paddingHorizontal: 14,
-
     fontSize: 14,
-
     color: '#222222',
-
     marginBottom: 16,
   },
 
-  /*
-   * PASSWORD
-   */
+  /* PASSWORD */
   passwordContainer: {
     height: 50,
-
     backgroundColor: '#E9E9E9',
-
     borderRadius: 8,
-
     flexDirection: 'row',
-
     alignItems: 'center',
-
     paddingHorizontal: 14,
-
     marginBottom: 18,
   },
 
   passwordInput: {
     flex: 1,
-
     fontSize: 14,
-
     color: '#222222',
-
     paddingVertical: 0,
   },
 
-  /*
-   * FORGOT PASSWORD
-   */
-  forgotContainer: {
-    alignItems: 'flex-end',
-
+  /* AUTO LOGIN + FORGOT PASSWORD ROW */
+  optionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 28,
+  },
+
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  checkboxLabel: {
+    color: '#333333',
+    fontSize: 14,
+    fontWeight: '400',
   },
 
   forgotText: {
     color: '#673B8B',
-
     fontSize: 14,
-
     fontWeight: '400',
   },
 
-  /*
-   * LOGIN BUTTON
-   */
+  /* LOGIN BUTTON */
   loginButton: {
     height: 51,
-
     backgroundColor: '#56327A',
-
     borderRadius: 9,
-
     justifyContent: 'center',
-
     alignItems: 'center',
   },
 
   loginButtonText: {
     color: '#FFFFFF',
-
     fontSize: 15,
-
     fontWeight: '600',
   },
 
-  /*
-   * REGISTER
-   */
+  /* REGISTER */
   registerContainer: {
     flexDirection: 'row',
-
     alignItems: 'center',
-
     justifyContent: 'center',
-
     marginTop: 48,
-
     gap: 16,
   },
 
   registerText: {
     color: '#FFFFFF',
-
     fontSize: 14,
-
     fontWeight: '500',
   },
 
   registerButton: {
     borderWidth: 1,
-
     borderColor: '#FFFFFF',
-
     borderRadius: 5,
-
     paddingHorizontal: 20,
-
     paddingVertical: 7,
   },
 
   registerButtonText: {
     color: '#FFFFFF',
-
     fontSize: 14,
-
     fontWeight: '500',
   },
 
-  /*
-   * POWERED BY
-   */
+  /* POWERED BY */
   poweredText: {
     position: 'absolute',
-
     bottom: 8,
-
     color: '#B5A5C7',
-
     fontSize: 14,
-
     fontWeight: '500',
   },
 });

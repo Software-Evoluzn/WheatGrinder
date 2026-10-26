@@ -10,6 +10,7 @@ import {
   Dimensions,
   SafeAreaView,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const AUTO_ADVANCE_MS = 3000;
 const { height } = Dimensions.get('window');
@@ -17,6 +18,9 @@ const { height } = Dimensions.get('window');
 const WelcomeScreen = ({ navigation }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateYAnim = useRef(new Animated.Value(15)).current;
+
+  // Timer aur tap dono goNext chalate hain, ye double navigation rokta hai
+  const hasNavigated = useRef(false);
 
   useEffect(() => {
     Animated.parallel([
@@ -39,8 +43,25 @@ const WelcomeScreen = ({ navigation }) => {
     return () => clearTimeout(timer);
   }, []);
 
-  const goNext = () => {
-    if (!navigation) return;
+  const goNext = async () => {
+    if (!navigation || hasNavigated.current) return;
+    hasNavigated.current = true;
+
+    try {
+      // Auto login on tha aur user ka customer_id saved hai?
+      const autoLogin = await AsyncStorage.getItem('auto_login');
+      const customerId = await AsyncStorage.getItem('customer_id');
+
+      if (autoLogin === 'true' && customerId) {
+        // Login screen skip karke seedha Main par jao
+        navigation.replace('Main', { customer_id: Number(customerId) });
+        return;
+      }
+    } catch (error) {
+      console.log('AUTO LOGIN CHECK ERROR:', error);
+    }
+
+    // Auto login off hai (ya error aaya) -> normal Login screen
     if (typeof navigation.replace === 'function') {
       navigation.replace('Login');
     } else if (typeof navigation.navigate === 'function') {

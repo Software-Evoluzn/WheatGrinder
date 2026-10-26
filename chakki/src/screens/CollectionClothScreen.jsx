@@ -20,6 +20,7 @@ import {
   AppDialog,
 } from './ui';
 import { colors, spacing, radii, typography, shadows, layout } from './theme';
+import DeviceOfflineGuard from '../components/DeviceOfflineGuard';
 
 /* -------------------------------------------------------------------------- */
 /*  HeaderMenu — static overflow (kebab) menu. No API / no dynamic data.       */
@@ -134,6 +135,9 @@ const CollectionClothScreen = ({ navigation, route }) => {
   return (
     <Screen background={colors.background}>
       {/* Header matches the flow screens: back + greeting/title + static menu. */}
+
+       <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
+
       <MainHeader
         greeting="Setup"
         title="Collection Cloth"

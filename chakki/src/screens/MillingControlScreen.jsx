@@ -9,6 +9,7 @@ import { Screen, MainHeader, IconButton, StatusBadge, AppDialog } from './ui';
 import { colors, spacing, radii, shadows, typography, layout } from './theme';
 import { sendDeviceCommand, fetchRegisteredSerialNumber } from '../services/deviceApi';
 import IPCONFIG from '../services/ip.json'
+import DeviceOfflineGuard from '../components/DeviceOfflineGuard';
 
 // Replace with your Flask-SocketIO server URL and port
 const SOCKET_URL = IPCONFIG.BASE_URL; 
@@ -90,6 +91,7 @@ const resolveSerialNumber = async (route) => {
 };
 
 const MillingControlScreen = ({ navigation, route }) => {
+  const serialNumber = route?.params?.serialNumber;
   const grainId = String(route?.params?.grain || 'wheat');
   const selectedGrain = String(route?.params?.grainName || grainId);
 
@@ -117,6 +119,11 @@ const MillingControlScreen = ({ navigation, route }) => {
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+  const incoming = route?.params?.processState;
+  if (incoming !== undefined) setProcessState(incoming);
+}, [route?.params?.processState]);
 
   // Real-time MQTT Socket.IO status listener
   useEffect(() => {
@@ -159,6 +166,10 @@ const MillingControlScreen = ({ navigation, route }) => {
     if (navigation?.goBack) navigation.goBack();
   };
 
+  const handleGoHome =()=>{
+    navigation.navigate('Main');
+  }
+
   const handleEditTexture = () => {
     if (textureLocked) return;
     navigation.navigate('SetGrindTexture', {
@@ -167,6 +178,7 @@ const MillingControlScreen = ({ navigation, route }) => {
       textureValue,
       serialNumber: route?.params?.serialNumber,
       fromMilling: true,
+      processState,
     });
   };
 
@@ -261,11 +273,23 @@ const MillingControlScreen = ({ navigation, route }) => {
 
   return (
     <Screen background={colors.background}>
+       <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
+
       <MainHeader
         greeting="Machine Control"
         title="Milling"
         onBack={handleBack}
-        right={<HeaderMenu />}
+        right={
+          <View style={styles.headerRight}>
+            <IconButton
+              name="home"
+              variant="ghost"
+              onPress={handleGoHome}
+              accessibilityLabel="Go to home"
+            />
+            <HeaderMenu />
+          </View>
+        }
       />
 
       <View style={styles.body}>
