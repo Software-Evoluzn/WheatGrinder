@@ -179,7 +179,7 @@ const SelfCleaningScreen = ({ navigation, route }) => {
   return (
     <Screen background={colors.background}>
 
-            <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
+            {/* <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} /> */}
       {/* Header: back + greeting/title (Home style) + static overflow menu. */}
       <MainHeader
         greeting="Machine Status"

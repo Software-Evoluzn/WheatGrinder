@@ -273,7 +273,7 @@ const MillingControlScreen = ({ navigation, route }) => {
 
   return (
     <Screen background={colors.background}>
-       <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
+       {/* <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} /> */}
 
       <MainHeader
         greeting="Machine Control"
