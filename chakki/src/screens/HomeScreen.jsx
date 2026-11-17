@@ -218,7 +218,7 @@ const fetchUserDevices = async (silent = false) => {
                 greeting="Welcome back"
                 title="MY DEVICES"
                 actionIcon="user"
-                onAction={() => navigation?.navigate('EditProfile')}
+                onAction={() => navigation?.navigate('SettingsScreen')}
             />
 
             {loading ? (

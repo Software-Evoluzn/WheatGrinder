@@ -51,6 +51,7 @@ const LoginScreen = ({ navigation }) => {
       console.log('Logged in user:', data);
 
       // customer_id local storage mein save karo
+      //const resolvedCustomerId = data?.customer_id ?? data.user.customer_id ?? data?.id;
       if (data.customer_id) {
         await AsyncStorage.setItem('customer_id', String(data.customer_id));
       }
