@@ -11,32 +11,23 @@ import {
   StyleSheet,
   StatusBar,
   Platform,
+  ActivityIndicator, // <-- Added for loader
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Camera } from 'react-native-camera-kit';
 import Feather from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { io } from 'socket.io-client'; // <-- Added Socket.io
 import IP_CONFIG from '../services/ip.json';
 
 const base_url = IP_CONFIG.BASE_URL;
 
 // =====================================================================
 // STEP 1: QR PARSER
-// QR ka text aisa hota hai:
-//   Product Name : Softel Multi Grain Millet Mill
-//   Device ID : softelF0C099
-//   MAC ID : 8C:4C:AD:F0:C0:99
-//
-// Har label ke baad ka value tab tak uthate hain jab tak
-// agla label na aa jaye (ya text khatam ho jaye).
 // =====================================================================
-
-// Saare labels jo QR mein aa sakte hain (naya + purana format dono)
 const ALL_LABELS =
   'Product Name|Device Name|Device ID|Serial No|Model No|MAC ID|MDF By';
 
-// Ek label ka value nikalne wala helper
-// labelNames example: 'Device ID|Serial No'  (jo bhi mile wo le lo)
 const getValue = (raw, labelNames) => {
   const regex = new RegExp(
     `(?:${labelNames})\\s*:\\s*([\\s\\S]*?)\\s*(?=(?:${ALL_LABELS})\\s*:|$)`,
@@ -51,23 +42,19 @@ const parseQR = (raw) => {
 
   const result = {
     productName: getValue(raw, 'Product Name|Device Name'),
-    serialNo: getValue(raw, 'Device ID|Serial No'), // Device ID hi serial number hai
+    serialNo: getValue(raw, 'Device ID|Serial No'),
     macId: getValue(raw, 'MAC ID'),
   };
 
   console.log('PARSED QR DATA: ', result);
 
-  // Device ID nahi mila to QR galat hai
   if (!result.serialNo) return null;
-
   return result;
 };
 
 // =====================================================================
 // STEP 2: DATE HELPERS
 // =====================================================================
-
-// Screen par dikhane ke liye: DD-MM-YYYY
 const formatDate = (date) => {
   const day = String(date.getDate()).padStart(2, '0');
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -75,7 +62,6 @@ const formatDate = (date) => {
   return `${day}-${month}-${year}`;
 };
 
-// Flask / MySQL ko bhejne ke liye: YYYY-MM-DD
 const formatDateForAPI = (date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -84,10 +70,55 @@ const formatDateForAPI = (date) => {
 };
 
 // =====================================================================
-// STEP 3: SCREEN
+// STEP 3: ONE-TIME SOCKET DEVICE STATUS CHECKER
+// =====================================================================
+const checkDeviceOnlineStatus = (serialNumber, timeoutMs = 5000) => {
+  return new Promise((resolve) => {
+    const sn = String(serialNumber).trim().toLowerCase();
+
+    const socket = io(base_url, {
+      transports: ['websocket'],
+      reconnection: false,
+    });
+
+    const cleanup = (isOnline) => {
+      clearTimeout(timer);
+      socket.off('device_status_update');
+      socket.disconnect();
+      resolve(isOnline);
+    };
+
+    // Agar 5 sec tak response nahi aaya to offline maano
+    const timer = setTimeout(() => {
+      cleanup(false);
+    }, timeoutMs);
+
+    socket.on('connect', () => {
+      socket.emit('get_device_status', { serial_number: serialNumber.trim() });
+    });
+
+    socket.on('connect_error', () => {
+      cleanup(false);
+    });
+
+    socket.on('device_status_update', (data) => {
+      if (!data?.serial_number) return;
+      if (String(data.serial_number).toLowerCase() !== sn) return;
+
+      if (data.status === 'online') {
+        cleanup(true);
+      } else if (data.status === 'offline') {
+        cleanup(false);
+      }
+      // Baaki messages (cleaning_done etc.) ignore honge jab tak online/offline na mile
+    });
+  });
+};
+
+// =====================================================================
+// STEP 4: SCREEN
 // =====================================================================
 const ProductRegistrationScreen = ({ navigation }) => {
-  // 'scan' ya 'manual'
   const [mode, setMode] = useState('scan');
   const [isCameraActive, setIsCameraActive] = useState(false);
 
@@ -97,17 +128,16 @@ const ProductRegistrationScreen = ({ navigation }) => {
   const [macId, setMacId] = useState('');
   const [customerId, setCustomerId] = useState(null);
 
+  // Loading state for register button
+  const [isRegistering, setIsRegistering] = useState(false);
+
   // Date
   const [purchaseDate, setPurchaseDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  // Scan line animation
   const scanAnimation = useRef(new Animated.Value(0)).current;
-
-  // Camera ek hi QR ko baar-baar read karta hai, ye usse rokta hai
   const hasScanned = useRef(false);
 
-  // ---- Screen khulte hi customer_id nikalo ----
   useEffect(() => {
     const fetchCustomerId = async () => {
       try {
@@ -120,7 +150,6 @@ const ProductRegistrationScreen = ({ navigation }) => {
     fetchCustomerId();
   }, []);
 
-  // ---- Camera on ho to scan line chalao ----
   useEffect(() => {
     if (isCameraActive) {
       Animated.loop(
@@ -140,15 +169,13 @@ const ProductRegistrationScreen = ({ navigation }) => {
     }
   }, [isCameraActive]);
 
-  // ---- Camera start karna ----
   const startScanner = () => {
-    hasScanned.current = false; // naya scan allow karo
+    hasScanned.current = false;
     setIsCameraActive(true);
   };
 
-  // ---- QR scan hone par ----
   const onReadCode = (event) => {
-    if (hasScanned.current) return; // pehle hi scan ho chuka hai
+    if (hasScanned.current) return;
 
     const qrData = event.nativeEvent.codeStringValue;
     console.log('QR Scanned: ', qrData);
@@ -163,8 +190,6 @@ const ProductRegistrationScreen = ({ navigation }) => {
     }
 
     hasScanned.current = true;
-
-    // Form mein data bharo
     setProductName(parsed.productName);
     setSerialNo(parsed.serialNo);
     setMacId(parsed.macId);
@@ -175,7 +200,6 @@ const ProductRegistrationScreen = ({ navigation }) => {
 
   // ---- Register button dabane par ----
   const handleRegister = async () => {
-    // Model No required nahi hai (naye QR mein nahi aata)
     if (!productName.trim() || !serialNo.trim() || !macId.trim()) {
       Alert.alert('Validation Error', 'Please complete all product fields.');
       return;
@@ -186,15 +210,30 @@ const ProductRegistrationScreen = ({ navigation }) => {
       return;
     }
 
+    setIsRegistering(true);
+
     try {
+      // 1. Pehle check karo device online hai ya nahi
+      const isDeviceOnline = await checkDeviceOnlineStatus(serialNo);
+
+      if (!isDeviceOnline) {
+        setIsRegistering(false);
+        Alert.alert(
+          'Device is Offline',
+          'Your device is currently offline, so it cannot be registered. Please turn on the device and connect it to Wi-Fi, then try again.'
+        );
+        return; // <-- Yahin ruk jayega, API call nahi hogi
+      }
+
+      // 2. Agar device ONLINE hai, tabhi registration API call karo
       const response = await fetch(`${base_url}/register-product`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customer_id: customerId,
-          product_name: productName,
-          serial_number: serialNo, // Device ID
-          mac_id: macId,
+          product_name: productName.trim(),
+          serial_number: serialNo.trim(),
+          mac_id: macId.trim(),
           purchase_date: formatDateForAPI(purchaseDate),
         }),
       });
@@ -202,22 +241,17 @@ const ProductRegistrationScreen = ({ navigation }) => {
       const data = await response.json();
 
       if (response.status === 409) {
-        // Device pehle se registered hai
         Alert.alert(
           'Device Already Registered',
           data.error || 'This device is already registered.'
         );
       } else if (response.ok) {
-
-        
-        // Success
         Alert.alert(
           'Success',
           data.message || 'Product Registered Successfully',
           [{ text: 'OK', onPress: () => navigation?.goBack() }]
         );
       } else {
-        // Baaki errors
         Alert.alert('Registration Failed', data.error || 'Something went wrong.');
       }
     } catch (error) {
@@ -226,6 +260,8 @@ const ProductRegistrationScreen = ({ navigation }) => {
         'Network Error',
         'Unable to connect to the server. Please try again.'
       );
+    } finally {
+      setIsRegistering(false);
     }
   };
 
@@ -425,12 +461,25 @@ const ProductRegistrationScreen = ({ navigation }) => {
       {/* Bottom Register button */}
       <View style={styles.bottomActionBar}>
         <TouchableOpacity
-          style={styles.primaryButton}
+          style={[
+            styles.primaryButton,
+            isRegistering && { opacity: 0.7 }, // Disabled visual effect
+          ]}
           activeOpacity={0.88}
           onPress={handleRegister}
+          disabled={isRegistering}
         >
-          <Text style={styles.primaryButtonText}>Register Product</Text>
-          <Feather name="arrow-right" size={18} color="#FFFFFF" />
+          {isRegistering ? (
+            <>
+              <ActivityIndicator size="small" color="#FFFFFF" />
+              <Text style={styles.primaryButtonText}>Checking Device...</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.primaryButtonText}>Register Product</Text>
+              <Feather name="arrow-right" size={18} color="#FFFFFF" />
+            </>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -439,9 +488,6 @@ const ProductRegistrationScreen = ({ navigation }) => {
 
 export default ProductRegistrationScreen;
 
-// =====================================================================
-// STYLES (same as before, koi change nahi)
-// =====================================================================
 const styles = StyleSheet.create({
   safeContainer: {
     flex: 1,

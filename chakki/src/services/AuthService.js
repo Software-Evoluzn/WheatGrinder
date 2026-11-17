@@ -1,7 +1,9 @@
 import IP_CONFIG from '../services/ip.json';
-
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const BASE_URL = IP_CONFIG.BASE_URL;
+
+const USER_STORAGE_KEY = '@rasoi_user_data';
 
 // ===============================
 // USER LOGIN
@@ -32,11 +34,87 @@ export const loginUser = async (email, password) => {
       );
     }
 
+
+    // Save logged-in user details locally
+    await AsyncStorage.setItem(
+      USER_STORAGE_KEY,
+      JSON.stringify({
+        customer_id: data.customer_id,
+        name: data.name,
+        email: data.email,
+        mobile: data.mobile,
+      })
+    );
+
     return data;
 
   } catch (error) {
     console.log('LOGIN ERROR:', error);
     throw error;
+  }
+};
+
+// ===============================
+// GET CURRENT LOGGED-IN USER
+// ===============================
+export const getStoredUser = async () => {
+  try {
+    const jsonValue = await AsyncStorage.getItem(USER_STORAGE_KEY);
+    return jsonValue != null ? JSON.parse(jsonValue) : null;
+  } catch (error) {
+    console.log('GET USER ERROR:', error);
+    return null;
+  }
+};
+
+// ===============================
+// LOGOUT USER
+// ===============================
+export const logoutUser = async () => {
+  try {
+    await AsyncStorage.removeItem(USER_STORAGE_KEY);
+  } catch (error) {
+    console.log('LOGOUT ERROR:', error);
+  }
+};
+
+
+export const getCustomerProductCount = async (customerId) => {
+  try {
+    const url = `${BASE_URL}/customer-products/${customerId}`;
+    console.log('Fetching product count from:', url);
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+    console.log('CUSTOMER PRODUCTS API RESPONSE:', JSON.stringify(data));
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to fetch products');
+    }
+
+    // Check direct array or any common wrapper key from Flask
+    if (Array.isArray(data)) return data.length;
+    if (Array.isArray(data.products)) return data.products.length;
+    if (Array.isArray(data.data)) return data.data.length;
+    if (Array.isArray(data.devices)) return data.devices.length;
+    if (Array.isArray(data.registrations)) return data.registrations.length;
+    if (Array.isArray(data.items)) return data.items.length;
+    if (typeof data.count === 'number') return data.count;
+
+    // Fallback: grab the first array property inside the response object
+    const firstArray = Object.values(data).find((val) => Array.isArray(val));
+    if (firstArray) return firstArray.length;
+
+    return 0;
+  } catch (error) {
+    console.log('PRODUCT COUNT ERROR:', error);
+    return 0;
   }
 };
 

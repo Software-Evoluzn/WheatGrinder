@@ -8,33 +8,31 @@ import {
   Alert,
   Animated,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import Feather from 'react-native-vector-icons/Feather';
 import { useAppTheme } from '../services/theme';
+import { getStoredUser, logoutUser,getCustomerProductCount } from '../services/AuthService'; // adjust path if needed
+
 import { colors, spacing, radii, typography, shadows, layout } from './theme';
 import { Screen, MainHeader, Card, SecondaryButton } from './ui';
 
 const SettingsScreen = ({ navigation }) => {
-  // Kept for the status-bar / dark-mode contract; visuals use brand tokens so
-  // Settings matches the rest of the app instead of the old copied dark theme.
   const { isDark } = useAppTheme();
 
-  // Local static/UI state
-  const [user] = useState({
-    name: 'Sejal Sharma',
-    email: 'sejal@rasoishop.com',
-    contact: '9876543210',
-  });
-
-  const [productCount] = useState(2);
+  // Dynamic User & Device State
+  const [user, setUser] = useState(null);
+  const [productCount, setProductCount] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   // Notification preferences
   const [smsEnabled, setSmsEnabled] = useState(false);
-  const [smsNumber, setSmsNumber] = useState(user.contact);
+  const [smsNumber, setSmsNumber] = useState('');
   const [emailEnabled, setEmailEnabled] = useState(false);
-  const [notificationEmail, setNotificationEmail] = useState(user.email);
+  const [notificationEmail, setNotificationEmail] = useState('');
   const [notificationErrors, setNotificationErrors] = useState({});
 
   // Content fade-in animation
@@ -48,9 +46,47 @@ const SettingsScreen = ({ navigation }) => {
     }).start();
   }, [headerFade]);
 
+  // Fetch user profile & device count every time Settings screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      const loadSettingsData = async () => {
+        try {
+          const storedUser = await getStoredUser();
+
+          if (!isActive) return;
+
+          if (storedUser) {
+            setUser(storedUser);
+            setSmsNumber((prev) => prev || storedUser.mobile || '');
+            setNotificationEmail((prev) => prev || storedUser.email || '');
+
+            if (storedUser.customer_id) {
+              const count = await getCustomerProductCount(storedUser.customer_id);
+              if (isActive) {
+                setProductCount(count);
+              }
+            }
+          }
+        } catch (err) {
+          console.log('Error loading settings:', err);
+        } finally {
+          if (isActive) setLoading(false);
+        }
+      };
+
+      loadSettingsData();
+
+      return () => {
+        isActive = false;
+      };
+    }, [])
+  );
+
   const userName = user?.name || '';
   const email = user?.email || '';
-  const contact = user?.contact || '';
+  const contact = user?.mobile || '';
 
   const validateNotificationSettings = useCallback(() => {
     const newErrors = {};
@@ -88,7 +124,11 @@ const SettingsScreen = ({ navigation }) => {
     Alert.alert('Success', 'Notification preferences saved locally.');
   }, [validateNotificationSettings]);
 
-  // Small reusable section header with a tinted icon chip on the left.
+  const handleLogout = async () => {
+    await logoutUser();
+    navigation.replace('Login');
+  };
+
   const SectionLabel = ({ icon, title }) => (
     <View style={styles.sectionHeaderRow}>
       <View style={styles.sectionIconChip}>
@@ -98,9 +138,19 @@ const SettingsScreen = ({ navigation }) => {
     </View>
   );
 
+  if (loading) {
+    return (
+      <Screen barStyle={isDark ? 'light-content' : 'dark-content'}>
+        <MainHeader title="Settings" right={null} />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </Screen>
+    );
+  }
+
   return (
     <Screen barStyle={isDark ? 'light-content' : 'dark-content'}>
-      {/* Shared primary-screen header (System A keeps the bottom tab bar). */}
       <MainHeader title="Settings" right={null} />
 
       <ScrollView
@@ -109,7 +159,7 @@ const SettingsScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Profile hero — anchors the screen with brand identity */}
+        {/* Profile hero */}
         <Animated.View style={{ opacity: headerFade }}>
           <View style={styles.hero}>
             <View style={styles.heroTop}>
@@ -181,10 +231,9 @@ const SettingsScreen = ({ navigation }) => {
 
             <View style={styles.divider} />
 
-            {/* Edit Profile as a list row */}
             <Pressable
               style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.7 }]}
-              onPress={() => navigation.navigate('EditProfile')}
+              onPress={() => navigation.navigate('EditProfile', { user })}
               accessibilityRole="button"
             >
               <View style={styles.linkRowLeft}>
@@ -203,7 +252,6 @@ const SettingsScreen = ({ navigation }) => {
           <SectionLabel icon="bell" title="Notifications & Alerts" />
 
           <Card padded={false} style={styles.cardInner}>
-            {/* SMS Alerts */}
             <View style={styles.switchRow}>
               <View style={styles.rowIconChip}>
                 <Feather name="message-square" size={15} color={colors.primary} />
@@ -249,7 +297,6 @@ const SettingsScreen = ({ navigation }) => {
 
             <View style={styles.divider} />
 
-            {/* Email Alerts */}
             <View style={styles.switchRow}>
               <View style={styles.rowIconChip}>
                 <Feather name="mail" size={15} color={colors.primary} />
@@ -332,7 +379,7 @@ const SettingsScreen = ({ navigation }) => {
         {/* Logout */}
         <Pressable
           style={({ pressed }) => [styles.logoutButton, pressed && { opacity: 0.85 }]}
-          onPress={() => navigation.replace('Login')}
+          onPress={handleLogout}
           accessibilityRole="button"
         >
           <Feather name="log-out" size={18} color={colors.danger} style={styles.logoutIcon} />
@@ -346,6 +393,7 @@ const SettingsScreen = ({ navigation }) => {
 };
 
 export default SettingsScreen;
+// Keep your existing `const styles = StyleSheet.create({...})` below
 
 const styles = StyleSheet.create({
   container: {
