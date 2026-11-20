@@ -3,6 +3,11 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 import random
 
+import base64
+
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+
 from database import get_cursor, get_db
 from services.email_service import send_otp_email
 
@@ -25,7 +30,13 @@ def register_customer():
             VALUES (%s, %s, %s, %s)
         """, (name, mobile, email, hashed_password))
         get_db().commit()
-        return jsonify({"message": "Customer registered successfully"}), 201
+
+        new_customer_id = cur.lastrowid  # Naya customer_id nikala
+
+        return jsonify({
+            "message": "Customer registered successfully",
+            "customer_id": new_customer_id
+        }), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -53,6 +64,77 @@ def login_customer():
         return jsonify({"error": "Invalid credentials"}), 401
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# ==========================================
+# ENABLE BIOMETRIC (Save Public Key & bio_device_id)
+# ==========================================
+@auth_bp.route('/enable-biometric', methods=['POST'])
+def enable_biometric():
+    data = request.json
+    customer_id = data.get('customer_id')
+    public_key = data.get('public_key')
+    bio_device_id = data.get('bio_device_id')
+
+    if not all([customer_id, public_key, bio_device_id]):
+        return jsonify({"error": "Missing required biometric data"}), 400
+
+    try:
+        cur = get_cursor()
+        cur.execute("""
+            UPDATE customers 
+            SET biometric_public_key = %s, bio_device_id = %s 
+            WHERE customer_id = %s
+        """, (public_key, bio_device_id, customer_id))
+        get_db().commit()
+        return jsonify({"message": "Biometric enabled successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ==========================================
+# BIOMETRIC LOGIN (Verify Signature)
+# ==========================================
+@auth_bp.route('/biometric-login', methods=['POST'])
+def biometric_login():
+    data = request.json
+    customer_id = data.get('customer_id')
+    signature_b64 = data.get('signature')
+    payload = data.get('payload')
+    bio_device_id = data.get('bio_device_id')
+
+    try:
+        cur = get_cursor()
+        cur.execute(
+            "SELECT * FROM customers WHERE customer_id = %s AND bio_device_id = %s",
+            (customer_id, bio_device_id)
+        )
+        customer = cur.fetchone()
+
+        if not customer or not customer.get('biometric_public_key'):
+            return jsonify({"error": "Biometric not configured for this device"}), 401
+
+        pem_key = f"-----BEGIN PUBLIC KEY-----\n{customer['biometric_public_key']}\n-----END PUBLIC KEY-----"
+        public_key = serialization.load_pem_public_key(pem_key.encode('utf-8'))
+
+        signature = base64.b64decode(signature_b64)
+        public_key.verify(
+            signature,
+            payload.encode('utf-8'),
+            padding.PKCS1v15(),
+            hashes.SHA256()
+        )
+
+        return jsonify({
+            "message": "Biometric Login Successful",
+            "customer_id": customer['customer_id'],
+            "name": customer['name'],
+            "mobile": customer['mobile'],
+            "email": customer['email']
+        }), 200
+
+    except Exception as e:
+        print("Biometric verification failed:", str(e))
+        return jsonify({"error": "Biometric authentication failed"}), 401
 
 
 @auth_bp.route('/forgot-password', methods=['POST'])

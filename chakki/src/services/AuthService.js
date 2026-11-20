@@ -1,9 +1,10 @@
 import IP_CONFIG from '../services/ip.json';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import DeviceInfo from 'react-native-device-info';
 const BASE_URL = IP_CONFIG.BASE_URL;
 
 const USER_STORAGE_KEY = '@rasoi_user_data';
+const BIOMETRIC_ENABLED_KEY = '@biometric_enabled_user';
 
 // ===============================
 // USER LOGIN
@@ -52,6 +53,66 @@ export const loginUser = async (email, password) => {
     console.log('LOGIN ERROR:', error);
     throw error;
   }
+};
+
+
+// ===============================
+// ENABLE BIOMETRIC ON SERVER
+// ===============================
+export const registerBiometricOnServer = async (customerId, publicKey) => {
+  const bioDeviceId = await DeviceInfo.getUniqueId();
+  const response = await fetch(`${BASE_URL}/enable-biometric`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      customer_id: customerId,
+      public_key: publicKey,
+      bio_device_id: bioDeviceId,
+    }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to enable biometric');
+
+  await AsyncStorage.setItem(BIOMETRIC_ENABLED_KEY, String(customerId));
+  return data;
+};
+
+// ===============================
+// BIOMETRIC LOGIN API CALL
+// ===============================
+export const loginWithBiometricApi = async (customerId, signature, payload) => {
+  const bioDeviceId = await DeviceInfo.getUniqueId();
+  const response = await fetch(`${BASE_URL}/biometric-login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      customer_id: customerId,
+      signature,
+      payload,
+      bio_device_id: bioDeviceId,
+    }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Biometric login failed');
+
+  await AsyncStorage.setItem(
+    USER_STORAGE_KEY,
+    JSON.stringify({
+      customer_id: data.customer_id,
+      name: data.name,
+      email: data.email,
+      mobile: data.mobile,
+    })
+  );
+
+  return data;
+};
+
+export const getBiometricCustomerId = async () => {
+  console.log('Fetching biometric customer ID from AsyncStorage...');
+  return await AsyncStorage.getItem(BIOMETRIC_ENABLED_KEY);
 };
 
 // ===============================

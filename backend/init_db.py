@@ -11,6 +11,9 @@ def init_schema():
         mobile      VARCHAR(15),
         email       VARCHAR(100) UNIQUE,
         password    VARCHAR(255),
+        biometric_public_key TEXT NULL,
+        bio_device_id        VARCHAR(255) NULL,
+
         created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Image,
@@ -14,7 +14,16 @@ import {
 } from 'react-native';
 
 import Feather from 'react-native-vector-icons/Feather';
-import { loginUser } from '../services/AuthService';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import ReactNativeBiometrics from 'react-native-biometrics';
+
+import {
+  loginUser,
+  loginWithBiometricApi,
+  getBiometricCustomerId,
+} from '../services/AuthService';
+
+const rnBiometrics = new ReactNativeBiometrics();
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -27,6 +36,76 @@ const LoginScreen = ({ navigation }) => {
   // Loading state
   const [loading, setLoading] = useState(false);
 
+  // Biometric states
+  const [savedBioCustomerId, setSavedBioCustomerId] = useState(null);
+
+  useEffect(() => {
+    checkBiometricSetup();
+  }, []);
+
+  const checkBiometricSetup = async () => {
+    try {
+      const { available } = await rnBiometrics.isSensorAvailable();
+      const storedCustId = await getBiometricCustomerId();
+
+      if (available && storedCustId) {
+        setSavedBioCustomerId(storedCustId);
+      }
+    } catch (e) {
+      console.log('Biometric check error:', e);
+    }
+  };
+
+  // Option 2: Biometric Login Handler
+  const handleBiometricLogin = async () => {
+    if (!savedBioCustomerId) {
+      Alert.alert(
+        'Biometric Not Enabled',
+        'Please enable biometric during registration first.'
+      );
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const payload = `${savedBioCustomerId}_${Date.now()}`;
+
+      const { success, signature } = await rnBiometrics.createSignature({
+        promptMessage: 'Login with Fingerprint / Biometric',
+        payload: payload,
+      });
+
+      if (success && signature) {
+        const data = await loginWithBiometricApi(
+          savedBioCustomerId,
+          signature,
+          payload
+        );
+
+        await AsyncStorage.setItem('customer_id', String(data.customer_id));
+
+        if (autoLogin) {
+          await AsyncStorage.setItem('auto_login', 'true');
+        } else {
+          await AsyncStorage.removeItem('auto_login');
+        }
+
+        navigation.replace('Main', {
+          customer_id: data.customer_id,
+        });
+      }
+    } catch (error) {
+      console.log('BIOMETRIC LOGIN ERROR:', error);
+      Alert.alert(
+        'Biometric Failed',
+        error.message || 'Unable to verify biometric. Please login with Email & Password.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Option 1: Email & Password Login Handler
   const handleLogin = async () => {
     if (!email.trim()) {
       Alert.alert('Error', 'Please enter email');
@@ -41,42 +120,23 @@ const LoginScreen = ({ navigation }) => {
     try {
       setLoading(true);
 
-      console.log('LOGIN REQUEST:', {
-        email: email.trim(),
-      });
-
-      // Call Flask API
       const data = await loginUser(email, password);
 
-      console.log('Logged in user:', data);
-
-      // customer_id local storage mein save karo
-      //const resolvedCustomerId = data?.customer_id ?? data.user.customer_id ?? data?.id;
       if (data.customer_id) {
         await AsyncStorage.setItem('customer_id', String(data.customer_id));
       }
 
-      // Auto Login: checkbox on hai to flag save karo, warna hata do
       if (autoLogin) {
         await AsyncStorage.setItem('auto_login', 'true');
       } else {
         await AsyncStorage.removeItem('auto_login');
       }
 
-      // Login successful
-      Alert.alert('Success', data.message || 'Login successful', [
-        {
-          text: 'OK',
-          onPress: () => {
-            navigation.replace('Main', {
-              customer_id: data.customer_id,
-            });
-          },
-        },
-      ]);
+      navigation.replace('Main', {
+        customer_id: data.customer_id,
+      });
     } catch (error) {
       console.log('LOGIN ERROR:', error);
-
       Alert.alert('Login Failed', error.message || 'Unable to login');
     } finally {
       setLoading(false);
@@ -163,7 +223,7 @@ const LoginScreen = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
 
-              {/* Login Button */}
+              {/* Option 1: Email & Password Login Button */}
               <TouchableOpacity
                 style={styles.loginButton}
                 onPress={handleLogin}
@@ -174,6 +234,33 @@ const LoginScreen = ({ navigation }) => {
                   {loading ? 'Logging in...' : 'Login'}
                 </Text>
               </TouchableOpacity>
+
+              {/* Option 2: Biometric Button (Agar biometric enabled hai) */}
+              {savedBioCustomerId && (
+                <>
+                  <View style={styles.dividerRow}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerText}>OR</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.biometricFullButton}
+                    onPress={handleBiometricLogin}
+                    disabled={loading}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons
+                      name="fingerprint"
+                      size={24}
+                      color="#56327A"
+                    />
+                    <Text style={styles.biometricButtonText}>
+                      Login with Biometric
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
 
             {/* Register */}
@@ -218,18 +305,13 @@ const styles = StyleSheet.create({
     minHeight: 800,
     borderRadius: 20,
     overflow: 'hidden',
-
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.18,
     shadowRadius: 25,
     elevation: 10,
   },
 
-  /* WHITE TOP SECTION */
   topSection: {
     height: 500,
     backgroundColor: '#FFFFFF',
@@ -243,17 +325,15 @@ const styles = StyleSheet.create({
     height: 100,
   },
 
-  /* PURPLE SECTION */
   bottomSection: {
     flex: 1,
-    minHeight: 300,
+    minHeight: 320,
     backgroundColor: '#55327A',
     alignItems: 'center',
     position: 'relative',
     paddingTop: 0,
   },
 
-  /* LOGIN CARD */
   loginCard: {
     width: '90%',
     maxWidth: 320,
@@ -262,13 +342,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 24,
-    marginTop: -245,
-
+    marginTop: -265,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
     shadowRadius: 20,
     elevation: 8,
@@ -279,10 +355,9 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: '#111111',
     textAlign: 'center',
-    marginBottom: 26,
+    marginBottom: 22,
   },
 
-  /* EMAIL INPUT */
   input: {
     height: 50,
     backgroundColor: '#E9E9E9',
@@ -290,10 +365,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     fontSize: 14,
     color: '#222222',
-    marginBottom: 16,
+    marginBottom: 14,
   },
 
-  /* PASSWORD */
   passwordContainer: {
     height: 50,
     backgroundColor: '#E9E9E9',
@@ -301,7 +375,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
-    marginBottom: 18,
+    marginBottom: 16,
   },
 
   passwordInput: {
@@ -311,12 +385,11 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
 
-  /* AUTO LOGIN + FORGOT PASSWORD ROW */
   optionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 28,
+    marginBottom: 22,
   },
 
   checkboxRow: {
@@ -337,9 +410,8 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
 
-  /* LOGIN BUTTON */
   loginButton: {
-    height: 51,
+    height: 50,
     backgroundColor: '#56327A',
     borderRadius: 9,
     justifyContent: 'center',
@@ -352,12 +424,48 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  /* REGISTER */
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 14,
+  },
+
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#DCDCDC',
+  },
+
+  dividerText: {
+    marginHorizontal: 10,
+    fontSize: 12,
+    color: '#777777',
+    fontWeight: '500',
+  },
+
+  biometricFullButton: {
+    height: 48,
+    borderWidth: 1.5,
+    borderColor: '#56327A',
+    borderRadius: 9,
+    backgroundColor: '#F8F4FC',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  biometricButtonText: {
+    color: '#56327A',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
   registerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 48,
+    marginTop: 32,
     gap: 16,
   },
 
@@ -381,7 +489,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  /* POWERED BY */
   poweredText: {
     position: 'absolute',
     bottom: 8,

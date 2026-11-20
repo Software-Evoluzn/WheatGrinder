@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Image,
@@ -12,7 +12,14 @@ import {
   Alert,
 } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
-import { registerUser } from '../services/AuthService';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import ReactNativeBiometrics from 'react-native-biometrics';
+import {
+  registerUser,
+  registerBiometricOnServer,
+} from '../services/AuthService';
+
+const rnBiometrics = new ReactNativeBiometrics();
 
 const RegisterScreen = ({ navigation }) => {
   const [userName, setUserName] = useState('');
@@ -24,10 +31,30 @@ const RegisterScreen = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // Biometric states
+  const [sensorAvailable, setSensorAvailable] = useState(false);
+  const [enableBiometric, setEnableBiometric] = useState(true);
+
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    checkSensor();
+  }, []);
+
+  const checkSensor = async () => {
+    try {
+      const { available } = await rnBiometrics.isSensorAvailable();
+      setSensorAvailable(available);
+      setEnableBiometric(available);
+    } catch (e) {
+      console.log('Sensor check error:', e);
+      setSensorAvailable(false);
+      setEnableBiometric(false);
+    }
+  };
+
   // ==========================================
-  // REGISTER
+  // REGISTER + BIOMETRIC SETUP
   // ==========================================
   const handleRegister = async () => {
     if (!userName.trim()) {
@@ -73,12 +100,6 @@ const RegisterScreen = ({ navigation }) => {
     try {
       setLoading(true);
 
-      console.log('REGISTER REQUEST:', {
-        name: userName,
-        mobile: mobileNumber,
-        email: email,
-      });
-
       const data = await registerUser(
         userName,
         mobileNumber,
@@ -87,6 +108,41 @@ const RegisterScreen = ({ navigation }) => {
       );
 
       console.log('REGISTER RESPONSE:', data);
+
+      // Agar user ne biometric checkbox tick kiya hai aur customer_id mila hai
+      if (sensorAvailable && enableBiometric && data.customer_id) {
+        try {
+          // Purani keys ho toh delete karke fresh keys banayein
+          await rnBiometrics.deleteKeys();
+          const { publicKey } = await rnBiometrics.createKeys();
+          await registerBiometricOnServer(data.customer_id, publicKey);
+
+          Alert.alert(
+            'Registration Successful',
+            'Account created & Biometric login enabled! You can now login with Email/Password or Biometric.',
+            [
+              {
+                text: 'OK',
+                onPress: () => navigation.replace('Login'),
+              },
+            ]
+          );
+          return;
+        } catch (bioError) {
+          console.log('BIOMETRIC SETUP ERROR:', bioError);
+          Alert.alert(
+            'Account Created',
+            'Account created successfully, but biometric setup could not be completed. You can still login with Email & Password.',
+            [
+              {
+                text: 'OK',
+                onPress: () => navigation.replace('Login'),
+              },
+            ]
+          );
+          return;
+        }
+      }
 
       Alert.alert(
         'Registration Successful',
@@ -218,6 +274,29 @@ const RegisterScreen = ({ navigation }) => {
                 maxLength={10}
               />
 
+              {/* Enable Biometric Option (Agar device support karta hai) */}
+              {sensorAvailable && (
+                <TouchableOpacity
+                  style={styles.biometricCheckboxRow}
+                  onPress={() => setEnableBiometric(!enableBiometric)}
+                  activeOpacity={0.7}
+                >
+                  <Feather
+                    name={enableBiometric ? 'check-square' : 'square'}
+                    size={20}
+                    color="#55327A"
+                  />
+                  <MaterialCommunityIcons
+                    name="fingerprint"
+                    size={20}
+                    color="#55327A"
+                  />
+                  <Text style={styles.biometricCheckboxLabel}>
+                    Enable Biometric Login
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               {/* Sign Up Button */}
               <TouchableOpacity
                 style={styles.signupButton}
@@ -228,6 +307,17 @@ const RegisterScreen = ({ navigation }) => {
                 <Text style={styles.signupButtonText}>
                   {loading ? 'Creating Account...' : 'Sign Up'}
                 </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Back to Login */}
+            <View style={styles.loginLinkContainer}>
+              <Text style={styles.loginLinkText}>Already Registered?</Text>
+              <TouchableOpacity
+                style={styles.loginLinkButton}
+                onPress={() => navigation.replace('Login')}
+              >
+                <Text style={styles.loginLinkButtonText}>Login</Text>
               </TouchableOpacity>
             </View>
 
@@ -254,7 +344,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 24,
-    paddingBottom: 40, // Keyboard khulne par niche extra scroll space
+    paddingBottom: 40,
   },
 
   mainCard: {
@@ -272,7 +362,7 @@ const styles = StyleSheet.create({
 
   /* ================= TOP WHITE ================= */
   topSection: {
-    height: 320, // Fixed 500 se kam kiya taaki card overlap clean rahe
+    height: 320,
     backgroundColor: '#FFFFFF',
     justifyContent: 'flex-start',
     alignItems: 'center',
@@ -300,7 +390,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 24,
-    marginTop: -145, // Top white section ke upar cleanly overlap karega
+    marginTop: -145,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
@@ -350,6 +440,21 @@ const styles = StyleSheet.create({
     padding: 4,
   },
 
+  /* ================= BIOMETRIC CHECKBOX ================= */
+  biometricCheckboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+    paddingVertical: 4,
+  },
+
+  biometricCheckboxLabel: {
+    color: '#333333',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+
   /* ================= SIGN UP BUTTON ================= */
   signupButton: {
     height: 50,
@@ -366,9 +471,38 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+  /* ================= ALREADY REGISTERED ================= */
+  loginLinkContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+    gap: 12,
+  },
+
+  loginLinkText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+
+  loginLinkButton: {
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    borderRadius: 5,
+    paddingHorizontal: 18,
+    paddingVertical: 6,
+  },
+
+  loginLinkButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+
   /* ================= POWERED ================= */
   poweredText: {
-    marginTop: 24, // Absolute hataya taaki scroll mein overlap na kare
+    marginTop: 24,
     color: '#B5A5C7',
     fontSize: 14,
     fontWeight: '500',
