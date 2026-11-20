@@ -16,8 +16,11 @@ global_client = None
 device_statuses = {}
 cleaning_done_devices = {}
 pause_screen_devices = {}
+grain_over_devices = {};
+
 PAUSE_FLAG_TTL = 60
 CLEANING_FLAG_TTL = 60  # seconds, isse purana flag ignore hoga
+GRAIN_OVER_FLAG_TTL = 60
 
 
 def update_device_status(serial_number, status):
@@ -91,12 +94,18 @@ def on_message(client, userdata, msg):
 
         # Sab kuch lowercase mein match karo
         is_pause_screen = "pause button select screen" in payload_lower
+        is_grain_over = (
+            "grain over" in payload_lower
+            or "load more grain" in payload_lower
+        )
 
         # status ab hamesha defined hai
         if is_pause_screen:
             status = "pause_screen"
         elif is_cleaning_done:
             status = "cleaning_done"
+        elif is_grain_over:
+            status = "grain_over"
         else:
             status = message_text.lower()
             
@@ -153,6 +162,23 @@ def on_message(client, userdata, msg):
                     "message": payload,
                 },
             )
+
+        if is_grain_over:
+            print(f"⚠️ Emitting grain_over_alert for {device_id}")
+            grain_over_devices[device_id.lower()] = time.time()
+            socketio.emit(
+                "grain_over_alert",
+                {
+                    "serial_number": device_id,
+                    "status": "grain_over",
+                    "title": "Grain Over!",
+                    "message": message_text, # "Grain Over! Load more grain or switch off the machine"
+                },
+            )
+
+        
+
+        
 
         # socketio.emit(
         #     "device_status_update",

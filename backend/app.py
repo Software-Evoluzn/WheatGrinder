@@ -7,7 +7,7 @@ from routes.products import products_bp
 from database import get_cursor, get_db
 from routes.grains import grains_bp
 from routes.mqtt_routes import mqtt_bp
-from mqtt_client import start_mqtt , cleaning_done_devices , CLEANING_FLAG_TTL , pause_screen_devices , PAUSE_FLAG_TTL,device_statuses
+from mqtt_client import start_mqtt , cleaning_done_devices , CLEANING_FLAG_TTL , pause_screen_devices , PAUSE_FLAG_TTL,device_statuses,grain_over_devices,GRAIN_OVER_FLAG_TTL
 from init_db import init_schema
 from extensions import socketio
 from flask_socketio import emit
@@ -153,6 +153,32 @@ def start_cleaning(data):
     sn = ((data or {}).get('serial_number') or '').lower()
     if sn:
         cleaning_done_devices.pop(sn, None)
+
+@socketio.on('check_grain_over')
+def check_grain_over(data):
+    sn = ((data or {}).get('serial_number') or '').lower()
+    ts = grain_over_devices.get(sn)
+
+    if ts and (time.time() - ts) < GRAIN_OVER_FLAG_TTL:
+        emit(
+            'grain_over_alert',
+            {
+                'serial_number': sn,
+                'status': 'grain_over',
+                'title': 'Grain Over!',
+                'message': 'Grain Over! Load more grain or switch off the machine',
+            },
+            to=request.sid,
+        )
+    elif ts:
+        grain_over_devices.pop(sn, None)
+
+
+@socketio.on('clear_grain_over')
+def clear_grain_over(data):
+    sn = ((data or {}).get('serial_number') or '').lower()
+    if sn:
+        grain_over_devices.pop(sn, None)
 
 
 # ============================================================
