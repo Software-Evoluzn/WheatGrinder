@@ -144,7 +144,32 @@ const SelfCleaningScreen = ({ navigation, route }) => {
   const { serialNumber, device } = route.params || {};
   const [isPublishing, setIsPublishing] = useState(false);
 
+  const [backWarningOpen , setBackWarningOpen] = useState(false);
+
+  const allowNavigationRef = useRef(false);
+
+  
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      // Agar user ne NEXT button dabaya hai toh aage jaane do
+      if (allowNavigationRef.current) {
+        return;
+      }
+
+      // Default back action ko rok do
+      e.preventDefault();
+
+      // User ko dialog dikhao ki process chal rahi hai
+     // setBackWarningOpen(true);
+     goToMain();
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
   console.log("serial number ", serialNumber);
+
   const handleNext = async() => {
 
     if (isPublishing) return
@@ -165,6 +190,9 @@ const SelfCleaningScreen = ({ navigation, route }) => {
     } finally {
       setIsPublishing(false);
 
+      // 3. Aage wali screen par jaane ki permission on karo
+      allowNavigationRef.current = true;
+
       if (navigation?.navigate) {
         navigation.navigate('CleaningProcessScreen', {
           serialNumber: serialNumber,
@@ -184,7 +212,8 @@ const SelfCleaningScreen = ({ navigation, route }) => {
       <MainHeader
         greeting="Machine Status"
         title="Cleaning"
-        onBack={navigation?.goBack ? () => navigation.goBack() : undefined}
+        onBack={() => setBackWarningOpen(true)}
+        //onBack={navigation?.goBack ? () => navigation.goBack() : undefined}
         right={<HeaderMenu />}
       />
 
@@ -209,6 +238,17 @@ const SelfCleaningScreen = ({ navigation, route }) => {
         disabled={isPublishing}
          />
       </BottomActionBar>
+
+      {/* 4. Warning Dialog jab user galti se back dabaye */}
+      <AppDialog
+        visible={backWarningOpen}
+        onClose={() => setBackWarningOpen(false)}
+        icon="alert-triangle"
+        title="Process in Progress"
+        message="Self-cleaning is currently running. You cannot go back until the process is complete."
+        confirmLabel="OK"
+        onConfirm={() => setBackWarningOpen(false)}
+      />
     </Screen>
   );
 };

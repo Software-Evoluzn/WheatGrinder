@@ -15,11 +15,12 @@ global_client = None
 
 device_statuses = {}
 cleaning_done_devices = {}
+cleaning_progress_devices = {}  # { "softelf0c097": {"progress": 70, "timestamp": ...} }
 pause_screen_devices = {}
-grain_over_devices = {};
+grain_over_devices = {}
 
 PAUSE_FLAG_TTL = 60
-CLEANING_FLAG_TTL = 60  # seconds, isse purana flag ignore hoga
+CLEANING_FLAG_TTL = 60
 GRAIN_OVER_FLAG_TTL = 60
 
 
@@ -43,7 +44,6 @@ def update_device_status(serial_number, status):
 def on_connect(client, userdata, flags, rc, properties=None):
     if rc == 0:
         print("MQTT connected successfully")
-        # Global pattern subscribe to catch status updates (+/#)
         client.subscribe("#")
     else:
         print(f"MQTT connection failed. Error code: {rc}")
@@ -58,7 +58,7 @@ def on_message(client, userdata, msg):
         device_id = None
         message_text = clean_payload
 
-        # Case 1: {device_id:softelF0C052:Self Cleaning is Done...}
+        # Case 1: {device_id:softelF0C052:Cleaning Process 70% Completed}
         if "device_id:" in clean_payload:
             parts = clean_payload.split(":")
             if len(parts) >= 2:
@@ -87,61 +87,60 @@ def on_message(client, userdata, msg):
         payload_lower = payload.lower()
 
         is_cleaning_done = (
-            "self cleaning is done, please discard contents from collection bowl"
-            in payload_lower
+            "self cleaning is done" in payload_lower
             or "discard contents" in payload_lower
         )
 
-        # Sab kuch lowercase mein match karo
+        # Match any cleaning percentage message e.g. "Cleaning Process 70% Completed"
+        cleaning_percent = None
+        if "cleaning" in payload_lower and "%" in payload_lower:
+            match = re.search(r"(\d+)\s*%", payload_lower)
+            if match:
+                cleaning_percent = int(match.group(1))
+
         is_pause_screen = "pause button select screen" in payload_lower
         is_grain_over = (
             "grain over" in payload_lower
             or "load more grain" in payload_lower
         )
 
-        # status ab hamesha defined hai
         if is_pause_screen:
             status = "pause_screen"
         elif is_cleaning_done:
             status = "cleaning_done"
+        elif cleaning_percent is not None:
+            status = "cleaning_progress"
         elif is_grain_over:
             status = "grain_over"
         else:
             status = message_text.lower()
-            
-            
-        if status in ["offline" , "disconnected"]:
-            connectivity_state="offline"
+
+        if status in ["offline", "disconnected"]:
+            connectivity_state = "offline"
         else:
-            connectivity_state="online"
-            
-        
-        device_statuses[sn_lower]={
-            "status":connectivity_state,
-            "raw_status":status,
-            "timestamp":time.time(),
+            connectivity_state = "online"
+
+        device_statuses[sn_lower] = {
+            "status": connectivity_state,
+            "raw_status": status,
+            "timestamp": time.time(),
         }
-        
-        update_device_status(device_id,connectivity_state)
-        
+
+        update_device_status(device_id, connectivity_state)
+
         socketio.emit(
             "device_status_update",
             {
-                "serial_number":device_id,
-                 "status":connectivity_state,
-                 "raw_status":status,
-                 "message":payload
-            }
+                "serial_number": device_id,
+                "status": connectivity_state,
+                "raw_status": status,
+                "message": payload,
+            },
         )
-            
-            
-            
-        # db_status = "offline" if status == "offline" else "online"
-        # update_device_status(device_id, db_status)
 
         if is_pause_screen:
             print(f"⏸️ Emitting pause_status_update for {device_id}")
-            pause_screen_devices[device_id.lower()] = time.time()
+            pause_screen_devices[sn_lower] = time.time()
             socketio.emit(
                 "pause_status_update",
                 {
@@ -151,46 +150,53 @@ def on_message(client, userdata, msg):
                 },
             )
 
+        # Real-time cleaning percentage emit (10%, 20%, 30%... 100%)
+        if cleaning_percent is not None:
+            print(f"🧹 Emitting cleaning progress {cleaning_percent}% for {device_id}")
+            cleaning_progress_devices[sn_lower] = {
+                "progress": cleaning_percent,
+                "timestamp": time.time(),
+            }
+            socketio.emit(
+                "cleaning_status_update",
+                {
+                    "serial_number": device_id,
+                    "status": "cleaning_progress",
+                    "progress": cleaning_percent,
+                    "message": payload,
+                },
+            )
+
         if is_cleaning_done:
             print(f"✅ Emitting cleaning_status_update for {device_id}")
-            cleaning_done_devices[device_id.lower()] = time.time()
+            cleaning_done_devices[sn_lower] = time.time()
+            cleaning_progress_devices.pop(sn_lower, None)
             socketio.emit(
                 "cleaning_status_update",
                 {
                     "serial_number": device_id,
                     "status": "cleaning_done",
+                    "progress": 100,
                     "message": payload,
                 },
             )
 
         if is_grain_over:
             print(f"⚠️ Emitting grain_over_alert for {device_id}")
-            grain_over_devices[device_id.lower()] = time.time()
+            grain_over_devices[sn_lower] = time.time()
             socketio.emit(
                 "grain_over_alert",
                 {
                     "serial_number": device_id,
                     "status": "grain_over",
                     "title": "Grain Over!",
-                    "message": message_text, # "Grain Over! Load more grain or switch off the machine"
+                    "message": message_text,
                 },
             )
 
-        
-
-        
-
-        # socketio.emit(
-        #     "device_status_update",
-        #     {
-        #         "serial_number": device_id,
-        #         "status": status,
-        #         "message": payload,
-        #     },
-        # )
-
     except Exception as e:
         print(f"MQTT message processing error: {e}")
+
 
 def start_mqtt():
     global global_client

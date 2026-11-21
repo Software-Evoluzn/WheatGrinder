@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Animated, Easing, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, Modal, Pressable, BackHandler } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-// import io from 'socket.io-client';
-// import IP_CONFIG from '../services/ip.json'; // Socket IP config
+import io from 'socket.io-client';
+import IP_CONFIG from '../services/ip.json'; // Socket IP config
 import DeviceOfflineGuard from '../components/DeviceOfflineGuard';
 
 import {
@@ -18,7 +18,7 @@ import {
 import { colors, spacing, typography, radii, shadows, layout } from './theme';
 
 const BRAND_GREEN = '#7DC24d';
-// const SOCKET_URL = IP_CONFIG.BASE_URL;
+const SOCKET_URL = IP_CONFIG.BASE_URL;
 const DONE_HOLD_MS = 2500;
 const NEXT_ROUTE = 'SelectGrain';
 
@@ -151,90 +151,115 @@ const CleaningProcessScreen = ({ navigation, route }) => {
   const { serialNumber, device } = route.params || {};
 
   const [phase, setPhase] = useState('progress'); // 'progress' | 'done'
-  const [progress, setProgress] = useState(15);
+  const [progress, setProgress] = useState(0);
   const checkScale = useRef(new Animated.Value(0)).current;
 
-  // Visual Progress simulation while waiting for MQTT completion
-  useEffect(() => {
-    if (phase !== 'progress') return;
-    const timer = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(timer);
-          setPhase('done');
-          return 100;
-        }
-        return Math.min(100, prev + 20);
-      });
-    }, 600);
-    return () => clearInterval(timer);
-  }, [phase]);
+  // Back warning dialog & forward-navigation permission ref
+  const [backWarningOpen, setBackWarningOpen] = useState(false);
+  const allowNavigationRef = useRef(false);
 
-  // Real-time Socket Listener for Direct MQTT Status (commented out for frontend testing)
-  // useEffect(() => {
-  //   const socket = io(SOCKET_URL, {
-  //     transports: ['websocket'],
-  //     reconnection: true,
-  //   });
-  //
-  //   const normalizeSerial = (value) =>
-  //     String(value || '')
-  //       .replace(/[{}]/g, '')
-  //       .trim()
-  //       .toLowerCase();
-  //
-  //   const handleCleaningDone = (data) => {
-  //     console.log('⚡ Cleaning status received:', data);
-  //
-  //     const incomingId = normalizeSerial(data?.serial_number);
-  //     const currentId = normalizeSerial(serialNumber);
-  //
-  //     console.log('📱 Current Serial:', currentId);
-  //     console.log('📡 Incoming Serial:', incomingId);
-  //
-  //     // Only process cleaning_done
-  //     if (data?.status !== 'cleaning_done') {
-  //       return;
-  //     }
-  //
-  //     // Match device serial number
-  //     if (
-  //       !currentId ||
-  //       incomingId === currentId ||
-  //       incomingId.includes(currentId) ||
-  //       currentId.includes(incomingId)
-  //     ) {
-  //       console.log('✅ SELF CLEANING DONE');
-  //       console.log('➡️ Moving to done state...');
-  //
-  //       setProgress(100);
-  //       setPhase('done');
-  //     }
-  //   };
-  //
-  //   socket.on('connect', () => {
-  //     console.log('⚡ Socket connected:', socket.id);
-  //
-  //     // Ask backend if cleaning was already completed
-  //     if (serialNumber) {
-  //       socket.emit('check_cleaning', {
-  //         serial_number: serialNumber,
-  //       });
-  //     }
-  //   });
-  //
-  //   socket.on('cleaning_status_update', handleCleaningDone);
-  //
-  //   socket.on('connect_error', (error) => {
-  //     console.log('❌ Socket connection error:', error.message);
-  //   });
-  //
-  //   return () => {
-  //     console.log('🔌 Cleaning socket disconnected');
-  //     socket.off('cleaning_status_update', handleCleaningDone);
-  //     socket.disconnect();
-  //   };
-  // }, [serialNumber]);
+  // Prevent user back navigation, but allow explicit RESET / NAVIGATE (e.g., from DeviceOfflineGuard "Back to Home")
+  useEffect(() => {
+    navigation?.setOptions?.({
+      gestureEnabled: false,
+      headerLeft: () => null,
+    });
+
+    const unsubscribe = navigation?.addListener?.('beforeRemove', (e) => {
+      if (allowNavigationRef.current) {
+        return;
+      }
+
+      const actionType = e?.data?.action?.type;
+
+      if (actionType === 'RESET' || actionType === 'NAVIGATE' || actionType === 'REPLACE') {
+        allowNavigationRef.current = true;
+        setBackWarningOpen(false);
+        return;
+      }
+
+      e.preventDefault();
+      setBackWarningOpen(true);
+    });
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (allowNavigationRef.current) {
+        return false;
+      }
+      setBackWarningOpen(true);
+      return true;
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+      backHandler.remove();
+    };
+  }, [navigation]);
+
+  // Real-time Socket Listener for Direct MQTT Status & Progress
+  useEffect(() => {
+    const socket = io(SOCKET_URL, {
+      transports: ['websocket'],
+      reconnection: true,
+    });
+
+    const normalizeSerial = (value) =>
+      String(value || '')
+        .replace(/[{}]/g, '')
+        .trim()
+        .toLowerCase();
+
+    const handleCleaningUpdate = (data) => {
+      console.log('⚡ Cleaning status received:', data);
+
+      const incomingId = normalizeSerial(data?.serial_number);
+      const currentId = normalizeSerial(serialNumber);
+
+      // Check if message belongs to current device
+      const isSameDevice =
+        !currentId ||
+        incomingId === currentId ||
+        incomingId.includes(currentId) ||
+        currentId.includes(incomingId);
+
+      if (!isSameDevice) return;
+
+      // 1. Live Percentage Update (e.g., 10%, 20%, ..., 100%)
+      if (data?.status === 'cleaning_progress' && typeof data?.progress === 'number') {
+        const pct = Math.max(0, Math.min(100, data.progress));
+        setProgress(pct);
+      }
+
+      // 2. Final Cleaning Done Message
+      if (data?.status === 'cleaning_done') {
+        console.log('✅ SELF CLEANING DONE');
+        setProgress(100);
+        setPhase('done');
+      }
+    };
+
+    socket.on('connect', () => {
+      console.log('⚡ Socket connected:', socket.id);
+
+      if (serialNumber) {
+        socket.emit('check_cleaning', {
+          serial_number: serialNumber,
+        });
+      }
+    });
+
+    socket.on('cleaning_status_update', handleCleaningUpdate);
+
+    socket.on('connect_error', (error) => {
+      console.log('❌ Socket connection error:', error.message);
+    });
+
+    return () => {
+      console.log('🔌 Cleaning socket disconnected');
+      socket.off('cleaning_status_update', handleCleaningUpdate);
+      socket.disconnect();
+    };
+  }, [serialNumber]);
 
   // Handle Done animation & Auto-navigation
   useEffect(() => {
@@ -248,6 +273,9 @@ const CleaningProcessScreen = ({ navigation, route }) => {
     }).start();
 
     const advance = setTimeout(() => {
+      allowNavigationRef.current = true;
+      setBackWarningOpen(false);
+
       const targetParams = { serialNumber, device };
       if (navigation?.replace) {
         navigation.replace(NEXT_ROUTE, targetParams);
@@ -263,6 +291,7 @@ const CleaningProcessScreen = ({ navigation, route }) => {
   if (phase === 'done') {
     return (
       <Screen background={colors.background} edges={['top', 'left', 'right', 'bottom']}>
+        <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
         <MainHeader greeting="Machine Status" title="Cleaning Process" onBack={undefined} right={<HeaderMenu />} />
 
         <View style={styles.centerContent}>
@@ -270,6 +299,16 @@ const CleaningProcessScreen = ({ navigation, route }) => {
           <Text style={styles.title}>Self cleaning is done</Text>
           <Text style={styles.message}>Please discard the contents from the collection bowl.</Text>
         </View>
+
+        <AppDialog
+          visible={backWarningOpen}
+          onClose={() => setBackWarningOpen(false)}
+          icon="alert-triangle"
+          title="Cleaning in Progress"
+          message="Please wait while the screen redirects to the next step."
+          confirmLabel="OK"
+          onConfirm={() => setBackWarningOpen(false)}
+        />
       </Screen>
     );
   }
@@ -277,6 +316,7 @@ const CleaningProcessScreen = ({ navigation, route }) => {
   // Progress View
   return (
     <Screen background={colors.background} edges={['top', 'left', 'right', 'bottom']}>
+      <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
       <MainHeader greeting="Machine Status" title="Cleaning Process" onBack={undefined} right={<HeaderMenu />} />
 
       <View style={styles.content}>
@@ -295,6 +335,16 @@ const CleaningProcessScreen = ({ navigation, route }) => {
 
         <StatusBadge label="Please wait" variant="info" icon="loader" style={{ marginTop: spacing.huge, alignSelf: 'center' }} />
       </View>
+
+      <AppDialog
+        visible={backWarningOpen}
+        onClose={() => setBackWarningOpen(false)}
+        icon="alert-triangle"
+        title="Cleaning in Progress"
+        message="Self-cleaning is currently running. Please wait until the process finishes."
+        confirmLabel="OK"
+        onConfirm={() => setBackWarningOpen(false)}
+      />
     </Screen>
   );
 };

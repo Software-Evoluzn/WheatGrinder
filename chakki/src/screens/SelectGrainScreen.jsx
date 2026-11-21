@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, Pressable, Modal } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -114,14 +114,40 @@ const SelectGrainScreen = ({ navigation, route }) => {
   const [errorMsg, setErrorMsg] = useState('');
 
   const serialNumber = route.params?.serialNumber;
+  const allowNavigationRef = useRef(false);
+
+  // Direct 'Main' screen par bhejne ka function
+  const goToMain = () => {
+    allowNavigationRef.current = true;
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'Main' }],
+    });
+  };
+
+  // Har tarah ke back press (hardware back / swipe back) ko intercept karke 'Main' par bhejna
+  useEffect(() => {
+    const unsubscribe = navigation?.addListener?.('beforeRemove', (e) => {
+      if (allowNavigationRef.current) {
+        return;
+      }
+
+      e.preventDefault();
+      goToMain();
+    });
+
+    return unsubscribe;
+  }, [navigation]);
 
   const handleCleanStone = async () => {
     if (sending) return;
 
     try {
       setSending(true);
+      allowNavigationRef.current = true;
       navigation.navigate('CleaningProcessScreen', { serialNumber });
     } catch (e) {
+      allowNavigationRef.current = false;
       console.log('Clean stone error:', e);
       setErrorMsg(e?.message || 'Could not find registered machine');
     } finally {
@@ -140,9 +166,9 @@ const SelectGrainScreen = ({ navigation, route }) => {
 
     setSending(true);
     try {
-      const serialNumber = await resolveSerialNumber(route);
+      const resolvedSerial = await resolveSerialNumber(route);
 
-      const res = await sendDeviceCommand(serialNumber, grain.command);
+      const res = await sendDeviceCommand(resolvedSerial, grain.command);
       const isSuccess = res?.success || res?.status === 'success' || res?.status === 200;
       if (!isSuccess) {
         throw new Error(res?.error || res?.message || 'Could not send grain selection to machine');
@@ -150,13 +176,15 @@ const SelectGrainScreen = ({ navigation, route }) => {
 
       const grainConfig = getGrainConfig(grain.id);
 
+      allowNavigationRef.current = true;
       navigation.navigate('GrainConfirmationScreen', {
-        serialNumber,
+        serialNumber: resolvedSerial,
         grain: grain.id,
         grainCommand: grain.command,
         texture: grainConfig.default,
       });
     } catch (e) {
+      allowNavigationRef.current = false;
       setErrorMsg(e.message || 'Network error, please try again.');
     } finally {
       setSending(false);
@@ -169,7 +197,7 @@ const SelectGrainScreen = ({ navigation, route }) => {
       <MainHeader
         greeting="Machine Setup"
         title="Select Grain"
-        onBack={navigation?.goBack ? () => navigation.goBack() : undefined}
+        onBack={goToMain}
         right={<HeaderMenu />}
       />
 
@@ -190,8 +218,6 @@ const SelectGrainScreen = ({ navigation, route }) => {
               >
                 <View style={[styles.thumbWrap, isSelected && styles.thumbWrapSelected]}>
                   {item.isOthers ? (
-                    // FIX: always purple so the dots stay visible on the white
-                    // (selected) circle — previously white-on-white = invisible
                     <Feather name="more-horizontal" size={44} color={colors.primary} />
                   ) : (
                     <Image source={item.image} style={styles.thumb} resizeMode="contain" />

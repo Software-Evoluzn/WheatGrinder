@@ -1,27 +1,31 @@
-from flask import Flask , request
+from flask import Flask, request
 from flask_cors import CORS
-from flask_socketio import SocketIO
+from flask_socketio import SocketIO, emit
+import time
 
 from routes.auth import auth_bp
 from routes.products import products_bp
 from database import get_cursor, get_db
 from routes.grains import grains_bp
 from routes.mqtt_routes import mqtt_bp
-from mqtt_client import start_mqtt , cleaning_done_devices , CLEANING_FLAG_TTL , pause_screen_devices , PAUSE_FLAG_TTL,device_statuses,grain_over_devices,GRAIN_OVER_FLAG_TTL
+from mqtt_client import (
+    start_mqtt,
+    cleaning_done_devices,
+    cleaning_progress_devices,
+    CLEANING_FLAG_TTL,
+    pause_screen_devices,
+    PAUSE_FLAG_TTL,
+    device_statuses,
+    grain_over_devices,
+    GRAIN_OVER_FLAG_TTL,
+)
 from init_db import init_schema
 from extensions import socketio
-from flask_socketio import emit
-import time;
-
-from mqtt_client import cleaning_done_devices
 
 app = Flask(__name__)
 CORS(app)
 
-
 socketio.init_app(app, cors_allowed_origins="*", async_mode="threading")
-
-
 
 # Register Blueprints first
 app.register_blueprint(auth_bp)
@@ -45,16 +49,17 @@ def init_app():
         print("MQTT client started successfully")
     else:
         print("MQTT client failed to start")
-        
+
+
 @socketio.on("get_device_status")
 def get_device_status(data):
     sn = ((data or {}).get("serial_number") or "").strip().lower()
     original_sn = (data or {}).get("serial_number")
-    print("sejal want to see the data here : " , sn , original_sn)
+    print("sejal want to see the data here : ", sn, original_sn)
     device_info = device_statuses.get(sn)
 
     if device_info:
-        print("sejal come oin device info : " , device_info)
+        print("sejal come oin device info : ", device_info)
         emit(
             "device_status_update",
             {
@@ -75,17 +80,17 @@ def get_device_status(data):
                 (sn,),
             )
             row = cur.fetchone()
-            
+
             db_status = "online" if row and row.get("is_online") == 1 else "offline"
-            print("sejal database status : " , db_status)
-            
+            print("sejal database status : ", db_status)
+
             # Cache in memory
             device_statuses[sn] = {
                 "status": db_status,
                 "raw_status": db_status,
                 "timestamp": time.time(),
             }
-            
+
             emit(
                 "device_status_update",
                 {
@@ -106,67 +111,94 @@ def get_device_status(data):
                 },
                 to=request.sid,
             )
-    
-    
-@app.route('/', methods=['GET'])
+
+
+@app.route("/", methods=["GET"])
 def home():
     return {
         "status": "success",
-        "message": "Thermo API is running"
-    }, 200   
-        
-@socketio.on('start_pause')
+        "message": "Thermo API is running",
+    }, 200
+
+
+@socketio.on("start_pause")
 def start_pause(data):
-    sn = ((data or {}).get('serial_number') or '').lower()
+    sn = ((data or {}).get("serial_number") or "").strip().lower()
     if sn:
-        pause_screen_devices.pop(sn, None)  # purana flag hatao
+        pause_screen_devices.pop(sn, None)
 
 
-@socketio.on('check_pause')
+@socketio.on("check_pause")
 def check_pause(data):
-    sn = ((data or {}).get('serial_number') or '').lower()
+    sn = ((data or {}).get("serial_number") or "").strip().lower()
     ts = pause_screen_devices.get(sn)
     if ts and (time.time() - ts) < PAUSE_FLAG_TTL:
-        emit('pause_status_update',
-             {'serial_number': sn, 'status': 'pause_screen'},
-             to=request.sid)
+        emit(
+            "pause_status_update",
+            {"serial_number": sn, "status": "pause_screen"},
+            to=request.sid,
+        )
     elif ts:
         pause_screen_devices.pop(sn, None)
-        
-        
-@socketio.on('check_cleaning')
-def check_cleaning(data):
-    sn = (data.get('serial_number') or '').lower()
-    ts = cleaning_done_devices.get(sn)
 
-    if ts and (time.time() - ts) < CLEANING_FLAG_TTL:
-        emit('cleaning_status_update',
-             {'serial_number': sn, 'status': 'cleaning_done'},
-             to=request.sid)
+
+@socketio.on("check_cleaning")
+def check_cleaning(data):
+    sn = ((data or {}).get("serial_number") or "").strip().lower()
+    if not sn:
+        return
+
+    now = time.time()
+
+    # 1. Check if cleaning is already done
+    ts = cleaning_done_devices.get(sn)
+    if ts and (now - ts) < CLEANING_FLAG_TTL:
+        emit(
+            "cleaning_status_update",
+            {"serial_number": sn, "status": "cleaning_done", "progress": 100},
+            to=request.sid,
+        )
+        return
     elif ts:
-        # flag is stale, remove it
         cleaning_done_devices.pop(sn, None)
-        
-        
-@socketio.on('start_cleaning')
+
+    # 2. Check if latest cleaning percentage is cached
+    prog = cleaning_progress_devices.get(sn)
+    if prog and (now - prog["timestamp"]) < CLEANING_FLAG_TTL:
+        emit(
+            "cleaning_status_update",
+            {
+                "serial_number": sn,
+                "status": "cleaning_progress",
+                "progress": prog["progress"],
+            },
+            to=request.sid,
+        )
+    elif prog:
+        cleaning_progress_devices.pop(sn, None)
+
+
+@socketio.on("start_cleaning")
 def start_cleaning(data):
-    sn = ((data or {}).get('serial_number') or '').lower()
+    sn = ((data or {}).get("serial_number") or "").strip().lower()
     if sn:
         cleaning_done_devices.pop(sn, None)
+        cleaning_progress_devices.pop(sn, None)
 
-@socketio.on('check_grain_over')
+
+@socketio.on("check_grain_over")
 def check_grain_over(data):
-    sn = ((data or {}).get('serial_number') or '').lower()
+    sn = ((data or {}).get("serial_number") or "").strip().lower()
     ts = grain_over_devices.get(sn)
 
     if ts and (time.time() - ts) < GRAIN_OVER_FLAG_TTL:
         emit(
-            'grain_over_alert',
+            "grain_over_alert",
             {
-                'serial_number': sn,
-                'status': 'grain_over',
-                'title': 'Grain Over!',
-                'message': 'Grain Over! Load more grain or switch off the machine',
+                "serial_number": sn,
+                "status": "grain_over",
+                "title": "Grain Over!",
+                "message": "Grain Over! Load more grain or switch off the machine",
             },
             to=request.sid,
         )
@@ -174,9 +206,9 @@ def check_grain_over(data):
         grain_over_devices.pop(sn, None)
 
 
-@socketio.on('clear_grain_over')
+@socketio.on("clear_grain_over")
 def clear_grain_over(data):
-    sn = ((data or {}).get('serial_number') or '').lower()
+    sn = ((data or {}).get("serial_number") or "").strip().lower()
     if sn:
         grain_over_devices.pop(sn, None)
 
@@ -185,8 +217,7 @@ def clear_grain_over(data):
 # START FLASK WITH SOCKETIO
 # ============================================================
 
-if __name__ == '__main__':
-    # Initialize DB & MQTT strictly inside the main process
+if __name__ == "__main__":
     init_app()
 
     socketio.run(
@@ -194,5 +225,5 @@ if __name__ == '__main__':
         host="0.0.0.0",
         port=5007,
         debug=True,
-        use_reloader=False  # Keeps single-process execution clean
+        use_reloader=False,
     )

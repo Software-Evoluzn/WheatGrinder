@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, Pressable, Modal, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, Pressable, Modal, ActivityIndicator, BackHandler } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,13 +8,10 @@ import io from 'socket.io-client';
 import { Screen, MainHeader, IconButton, StatusBadge, AppDialog } from './ui';
 import { colors, spacing, radii, shadows, typography, layout } from './theme';
 import { sendDeviceCommand, fetchRegisteredSerialNumber } from '../services/deviceApi';
-import IPCONFIG from '../services/ip.json'
+import IPCONFIG from '../services/ip.json';
 import DeviceOfflineGuard from '../components/DeviceOfflineGuard';
 
-// Replace with your Flask-SocketIO server URL and port
-const SOCKET_URL = IPCONFIG.BASE_URL; 
-
-// Pause confirmation wait time (ms). Timeout par sirf error dikhega, PAUSE active nahi hoga.
+const SOCKET_URL = IPCONFIG.BASE_URL;
 const PAUSE_TIMEOUT_MS = 120000; // 2 minute
 
 /* Static overflow (kebab) menu */
@@ -102,17 +99,28 @@ const MillingControlScreen = ({ navigation, route }) => {
 
   const [processState, setProcessState] = useState(route?.params?.processState ?? null); // null | 'START' | 'PAUSE'
   const [pendingAction, setPendingAction] = useState(null); // null | 'START' | 'PAUSE'
-  const [isLoading, setIsLoading] = useState(false); // Controls the spinning progress dialog
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [backWarningOpen, setBackWarningOpen] = useState(false);
 
   const socketRef = useRef(null);
   const pauseTimeoutRef = useRef(null);
   const serialRef = useRef(null);
+  const allowNavigationRef = useRef(false);
 
   const sending = pendingAction !== null;
   const textureLocked = sending || isLoading;
 
-  // Serial number pehle hi resolve kar lo, taaki doosri machine ke events ignore ho sakein
+  // Back kab block hona chahiye:
+  // Jab machine START ho, ya START/PAUSE command send/wait ho rahi ho.
+  // Jab processState === 'PAUSE' ho (aur loading khatam ho) ya null (Ready) ho, tab back allowed hai.
+  const isBackBlocked = processState === 'START' || sending || isLoading;
+
+  // Latest state ko ref mein rakhna taaki beforeRemove aur BackHandler ko hamesha fresh value mile
+  const isBackBlockedRef = useRef(isBackBlocked);
+  isBackBlockedRef.current = isBackBlocked;
+
+  // Serial number pehle hi resolve kar lo
   useEffect(() => {
     resolveSerialNumber(route)
       .then((sn) => { serialRef.current = sn; })
@@ -121,9 +129,47 @@ const MillingControlScreen = ({ navigation, route }) => {
   }, []);
 
   useEffect(() => {
-  const incoming = route?.params?.processState;
-  if (incoming !== undefined) setProcessState(incoming);
-}, [route?.params?.processState]);
+    const incoming = route?.params?.processState;
+    if (incoming !== undefined) setProcessState(incoming);
+  }, [route?.params?.processState]);
+
+  // Back button / swipe-back interception
+  useEffect(() => {
+    navigation?.setOptions?.({
+      gestureEnabled: !isBackBlocked,
+    });
+  }, [navigation, isBackBlocked]);
+
+  useEffect(() => {
+    const unsubscribe = navigation?.addListener?.('beforeRemove', (e) => {
+      if (allowNavigationRef.current || !isBackBlockedRef.current) {
+        return;
+      }
+
+      const actionType = e?.data?.action?.type;
+      // Programmatic RESET / NAVIGATE (e.g., Home button ya Offline guard) ko allow karein
+      if (actionType === 'RESET' || actionType === 'NAVIGATE' || actionType === 'REPLACE') {
+        setBackWarningOpen(false);
+        return;
+      }
+
+      e.preventDefault();
+      setBackWarningOpen(true);
+    });
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (allowNavigationRef.current || !isBackBlockedRef.current) {
+        return false;
+      }
+      setBackWarningOpen(true);
+      return true;
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+      backHandler.remove();
+    };
+  }, [navigation]);
 
   // Real-time MQTT Socket.IO status listener
   useEffect(() => {
@@ -145,7 +191,7 @@ const MillingControlScreen = ({ navigation, route }) => {
       console.log('Pause update:', data);
 
       const sn = serialRef.current?.toLowerCase();
-      if (sn && data?.serial_number?.toLowerCase() !== sn) return; // doosri machine ignore
+      if (sn && data?.serial_number?.toLowerCase() !== sn) return;
 
       if (data?.status === 'pause_screen') {
         clearTimeout(pauseTimeoutRef.current);
@@ -163,15 +209,21 @@ const MillingControlScreen = ({ navigation, route }) => {
   }, []);
 
   const handleBack = () => {
+    if (isBackBlocked) {
+      setBackWarningOpen(true);
+      return;
+    }
     if (navigation?.goBack) navigation.goBack();
   };
 
-  const handleGoHome =()=>{
+  const handleGoHome = () => {
+    allowNavigationRef.current = true;
     navigation.navigate('Main');
-  }
+  };
 
   const handleEditTexture = () => {
     if (textureLocked) return;
+    allowNavigationRef.current = true;
     navigation.navigate('SetGrindTexture', {
       grain: grainId,
       grainName: route?.params?.grainName,
@@ -183,15 +235,15 @@ const MillingControlScreen = ({ navigation, route }) => {
   };
 
   const publish = async (command) => {
-    const serialNumber = await resolveSerialNumber(route);
+    const sn = await resolveSerialNumber(route);
 
-    console.log(`Sending ${command} to`, serialNumber);
-    const res = await sendDeviceCommand(serialNumber, command);
+    console.log(`Sending ${command} to`, sn);
+    const res = await sendDeviceCommand(sn, command);
 
     if (!res?.success) {
       throw new Error(res?.error || `Could not send ${command} to machine`);
     }
-    return serialNumber;
+    return sn;
   };
 
   const handleToggleStart = async () => {
@@ -217,18 +269,16 @@ const MillingControlScreen = ({ navigation, route }) => {
     }
 
     setPendingAction('PAUSE');
-    setIsLoading(true); // Spinner tab tak, jab tak 'pause_screen' MQTT message na aaye
+    setIsLoading(true);
 
     try {
       const sn = await resolveSerialNumber(route);
       serialRef.current = sn;
 
-      // Purana (stale) pause flag server par clear karo
       socketRef.current?.emit('start_pause', { serial_number: sn });
 
       await publish('pauseGrinding');
 
-      // Sirf error dikhayega, PAUSE active nahi karega
       clearTimeout(pauseTimeoutRef.current);
       pauseTimeoutRef.current = setTimeout(() => {
         setIsLoading(false);
@@ -271,9 +321,18 @@ const MillingControlScreen = ({ navigation, route }) => {
     : processState === 'PAUSE' ? 'Paused'
     : 'Ready';
 
+  // Dynamic warning message based on whether machine is running or pausing
+  const backWarningTitle =
+    pendingAction === 'PAUSE' || isLoading ? 'Pausing Machine' : 'Milling in Progress';
+
+  const backWarningMessage =
+    pendingAction === 'PAUSE' || isLoading
+      ? 'The machine is currently pausing. Please wait until pause is confirmed before going back.'
+      : 'The machine is currently running. Please tap PAUSE and wait for it to pause before going back.';
+
   return (
     <Screen background={colors.background}>
-       {/* <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} /> */}
+      {/* <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} /> */}
 
       <MainHeader
         greeting="Machine Control"
@@ -335,7 +394,12 @@ const MillingControlScreen = ({ navigation, route }) => {
       </View>
 
       {/* Progress Dialog (Spinner Modal) */}
-      <Modal transparent visible={isLoading} animationType="fade">
+      <Modal
+        transparent
+        visible={isLoading}
+        animationType="fade"
+        onRequestClose={() => setBackWarningOpen(true)}
+      >
         <View style={styles.loaderOverlay}>
           <View style={styles.loaderCard}>
             <ActivityIndicator size="large" color={colors.primary} />
@@ -344,6 +408,17 @@ const MillingControlScreen = ({ navigation, route }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Back Warning Dialog */}
+      <AppDialog
+        visible={backWarningOpen}
+        onClose={() => setBackWarningOpen(false)}
+        icon="alert-triangle"
+        title={backWarningTitle}
+        message={backWarningMessage}
+        confirmLabel="OK"
+        onConfirm={() => setBackWarningOpen(false)}
+      />
 
       {/* Error dialog */}
       <AppDialog
@@ -362,6 +437,7 @@ const MillingControlScreen = ({ navigation, route }) => {
 export default MillingControlScreen;
 
 const styles = StyleSheet.create({
+  headerRight: { flexDirection: 'row', alignItems: 'center' },
   menuOverlay: { flex: 1, backgroundColor: 'transparent' },
   menuCard: {
     position: 'absolute',
