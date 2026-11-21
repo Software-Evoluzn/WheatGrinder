@@ -26,6 +26,7 @@ def init_schema():
         serial_number   VARCHAR(100),
         model_number    VARCHAR(100),
         mac_id          VARCHAR(100),
+        invoice_path      VARCHAR(255),
         purchase_date   DATE,
         warranty_years  INT DEFAULT 1,
         warranty_expiry DATE,

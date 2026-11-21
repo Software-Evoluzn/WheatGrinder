@@ -21,6 +21,80 @@ import {
 
 const rnBiometrics = new ReactNativeBiometrics();
 
+// ==========================================
+// VALIDATION HELPERS
+// ==========================================
+const NAME_REGEX = /^[A-Za-z][A-Za-z\s.'-]{1,49}$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const MOBILE_REGEX = /^[6-9]\d{9}$/; // Indian 10-digit mobile numbers
+
+const getPasswordChecks = (password) => [
+  { key: 'length', label: 'At least 8 characters', ok: password.length >= 8 },
+  { key: 'upper', label: 'One uppercase letter (A-Z)', ok: /[A-Z]/.test(password) },
+  { key: 'lower', label: 'One lowercase letter (a-z)', ok: /[a-z]/.test(password) },
+  { key: 'number', label: 'One number (0-9)', ok: /\d/.test(password) },
+  {
+    key: 'special',
+    label: 'One special character (!@#$%^&*...)',
+    ok: /[^A-Za-z0-9\s]/.test(password),
+  },
+  { key: 'nospace', label: 'No spaces', ok: !/\s/.test(password) },
+];
+
+const validateForm = ({
+  userName,
+  mobileNumber,
+  email,
+  password,
+  confirmPassword,
+}) => {
+  const errors = {};
+
+  // Name
+  if (!userName.trim()) {
+    errors.userName = 'Please enter your name';
+  } else if (!NAME_REGEX.test(userName.trim())) {
+    errors.userName =
+      "Name should be 2-50 letters (only letters, spaces, . ' -)";
+  }
+
+  // Mobile
+  if (!mobileNumber.trim()) {
+    errors.mobileNumber = 'Please enter mobile number';
+  } else if (!/^\d+$/.test(mobileNumber.trim())) {
+    errors.mobileNumber = 'Mobile number should contain digits only';
+  } else if (!MOBILE_REGEX.test(mobileNumber.trim())) {
+    errors.mobileNumber =
+      'Enter a valid 10 digit mobile number starting with 6-9';
+  }
+
+  // Email
+  if (!email.trim()) {
+    errors.email = 'Please enter email';
+  } else if (!EMAIL_REGEX.test(email.trim())) {
+    errors.email = 'Please enter a valid email address';
+  }
+
+  // Password
+  if (!password) {
+    errors.password = 'Please enter password';
+  } else {
+    const failed = getPasswordChecks(password).filter((c) => !c.ok);
+    if (failed.length > 0) {
+      errors.password = 'Password does not meet all requirements';
+    }
+  }
+
+  // Confirm password
+  if (!confirmPassword) {
+    errors.confirmPassword = 'Please confirm your password';
+  } else if (password !== confirmPassword) {
+    errors.confirmPassword = 'Passwords do not match';
+  }
+
+  return errors;
+};
+
 const RegisterScreen = ({ navigation }) => {
   const [userName, setUserName] = useState('');
   const [password, setPassword] = useState('');
@@ -30,6 +104,11 @@ const RegisterScreen = ({ navigation }) => {
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Validation states
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
+  const [passwordFocused, setPasswordFocused] = useState(false);
 
   // Biometric states
   const [sensorAvailable, setSensorAvailable] = useState(false);
@@ -53,47 +132,52 @@ const RegisterScreen = ({ navigation }) => {
     }
   };
 
+  const passwordChecks = getPasswordChecks(password);
+
+  // Re-validate a single field when user leaves it
+  const handleBlur = (field) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    const allErrors = validateForm({
+      userName,
+      mobileNumber,
+      email,
+      password,
+      confirmPassword,
+    });
+    setErrors((prev) => ({ ...prev, [field]: allErrors[field] }));
+  };
+
+  // Clear a field's error as soon as the user starts fixing it
+  const clearError = (field) => {
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
+  };
+
   // ==========================================
   // REGISTER + BIOMETRIC SETUP
   // ==========================================
   const handleRegister = async () => {
-    if (!userName.trim()) {
-      Alert.alert('Error', 'Please enter your name');
-      return;
-    }
+    const validationErrors = validateForm({
+      userName,
+      mobileNumber,
+      email,
+      password,
+      confirmPassword,
+    });
 
-    if (!mobileNumber.trim()) {
-      Alert.alert('Error', 'Please enter mobile number');
-      return;
-    }
+    setErrors(validationErrors);
+    setTouched({
+      userName: true,
+      mobileNumber: true,
+      email: true,
+      password: true,
+      confirmPassword: true,
+    });
 
-    if (mobileNumber.trim().length !== 10) {
-      Alert.alert('Error', 'Please enter a valid 10 digit mobile number');
-      return;
-    }
-
-    if (!email.trim()) {
-      Alert.alert('Error', 'Please enter email');
-      return;
-    }
-
-    if (!password.trim()) {
-      Alert.alert('Error', 'Please enter password');
-      return;
-    }
-
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
-      return;
-    }
-
-    if (!confirmPassword.trim()) {
-      Alert.alert('Error', 'Please confirm your password');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      Alert.alert('Error', 'Password and confirm password do not match');
+    const firstError = Object.values(validationErrors).find(Boolean);
+    if (firstError) {
+      Alert.alert('Please fix the errors', firstError);
       return;
     }
 
@@ -106,8 +190,6 @@ const RegisterScreen = ({ navigation }) => {
         email,
         password
       );
-
-      console.log('REGISTER RESPONSE:', data);
 
       // Agar user ne biometric checkbox tick kiya hai aur customer_id mila hai
       if (sensorAvailable && enableBiometric && data.customer_id) {
@@ -200,23 +282,49 @@ const RegisterScreen = ({ navigation }) => {
 
               {/* User Name */}
               <TextInput
-                style={styles.input}
+                style={[
+                  styles.input,
+                  touched.userName && errors.userName && styles.inputError,
+                ]}
                 value={userName}
-                onChangeText={setUserName}
+                onChangeText={(t) => {
+                  setUserName(t);
+                  clearError('userName');
+                }}
+                onBlur={() => handleBlur('userName')}
                 placeholder="User Name"
                 placeholderTextColor="#555"
                 autoCapitalize="words"
+                maxLength={50}
               />
+              {touched.userName && errors.userName && (
+                <Text style={styles.errorText}>{errors.userName}</Text>
+              )}
 
               {/* Password */}
-              <View style={styles.passwordContainer}>
+              <View
+                style={[
+                  styles.passwordContainer,
+                  touched.password && errors.password && styles.inputError,
+                ]}
+              >
                 <TextInput
                   style={styles.passwordInput}
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={(t) => {
+                    setPassword(t);
+                    clearError('password');
+                  }}
+                  onFocus={() => setPasswordFocused(true)}
+                  onBlur={() => {
+                    setPasswordFocused(false);
+                    handleBlur('password');
+                  }}
                   placeholder="Password"
                   placeholderTextColor="#777"
                   secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
@@ -230,15 +338,48 @@ const RegisterScreen = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
 
+              {/* Live password requirements */}
+              {(passwordFocused || (touched.password && errors.password)) && (
+                <View style={styles.passwordRules}>
+                  {passwordChecks.map((rule) => (
+                    <View key={rule.key} style={styles.ruleRow}>
+                      <Feather
+                        name={rule.ok ? 'check-circle' : 'circle'}
+                        size={13}
+                        color={rule.ok ? '#2E9E5B' : '#999'}
+                      />
+                      <Text
+                        style={[styles.ruleText, rule.ok && styles.ruleTextOk]}
+                      >
+                        {rule.label}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
               {/* Confirm Password */}
-              <View style={styles.passwordContainer}>
+              <View
+                style={[
+                  styles.passwordContainer,
+                  touched.confirmPassword &&
+                    errors.confirmPassword &&
+                    styles.inputError,
+                ]}
+              >
                 <TextInput
                   style={styles.passwordInput}
                   value={confirmPassword}
-                  onChangeText={setConfirmPassword}
+                  onChangeText={(t) => {
+                    setConfirmPassword(t);
+                    clearError('confirmPassword');
+                  }}
+                  onBlur={() => handleBlur('confirmPassword')}
                   placeholder="Confirm Password"
                   placeholderTextColor="#777"
                   secureTextEntry={!showConfirmPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
                 />
                 <TouchableOpacity
                   onPress={() => setShowConfirmPassword(!showConfirmPassword)}
@@ -251,28 +392,55 @@ const RegisterScreen = ({ navigation }) => {
                   />
                 </TouchableOpacity>
               </View>
+              {touched.confirmPassword && errors.confirmPassword && (
+                <Text style={styles.errorText}>{errors.confirmPassword}</Text>
+              )}
 
               {/* Email */}
               <TextInput
-                style={styles.input}
+                style={[
+                  styles.input,
+                  touched.email && errors.email && styles.inputError,
+                ]}
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(t) => {
+                  setEmail(t);
+                  clearError('email');
+                }}
+                onBlur={() => handleBlur('email')}
                 placeholder="Email ID"
                 placeholderTextColor="#555"
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
               />
+              {touched.email && errors.email && (
+                <Text style={styles.errorText}>{errors.email}</Text>
+              )}
 
               {/* Mobile Number */}
               <TextInput
-                style={styles.input}
+                style={[
+                  styles.input,
+                  touched.mobileNumber &&
+                    errors.mobileNumber &&
+                    styles.inputError,
+                ]}
                 value={mobileNumber}
-                onChangeText={setMobileNumber}
+                onChangeText={(t) => {
+                  // Allow digits only
+                  setMobileNumber(t.replace(/[^0-9]/g, ''));
+                  clearError('mobileNumber');
+                }}
+                onBlur={() => handleBlur('mobileNumber')}
                 placeholder="Mobile Number"
                 placeholderTextColor="#555"
                 keyboardType="phone-pad"
                 maxLength={10}
               />
+              {touched.mobileNumber && errors.mobileNumber && (
+                <Text style={styles.errorText}>{errors.mobileNumber}</Text>
+              )}
 
               {/* Enable Biometric Option (Agar device support karta hai) */}
               {sensorAvailable && (
@@ -333,7 +501,6 @@ const RegisterScreen = ({ navigation }) => {
 export default RegisterScreen;
 
 const styles = StyleSheet.create({
-  /* ================= MAIN ================= */
   container: {
     flex: 1,
     backgroundColor: '#F3F3F3',
@@ -438,6 +605,45 @@ const styles = StyleSheet.create({
 
   eyeButton: {
     padding: 4,
+  },
+
+  /* ================= VALIDATION ================= */
+  inputError: {
+    borderWidth: 1,
+    borderColor: '#D93025',
+  },
+
+  errorText: {
+    color: '#D93025',
+    fontSize: 12,
+    marginTop: -9,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+
+  passwordRules: {
+    backgroundColor: '#F9F7FC',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginTop: -6,
+    marginBottom: 14,
+  },
+
+  ruleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 2,
+  },
+
+  ruleText: {
+    fontSize: 12,
+    color: '#777',
+  },
+
+  ruleTextOk: {
+    color: '#2E9E5B',
   },
 
   /* ================= BIOMETRIC CHECKBOX ================= */

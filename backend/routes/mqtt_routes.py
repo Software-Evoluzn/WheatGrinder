@@ -1,7 +1,7 @@
-from flask import Blueprint , request , jsonify
-from mqtt_client import publish_message , subscribe_to_device
+from flask import Blueprint, request, jsonify
+from mqtt_client import publish_message, subscribe_to_device
 
-mqtt_bp = Blueprint('mqtt_bp' , __name__)
+mqtt_bp = Blueprint('mqtt_bp', __name__)
 
 
 ALLOWED_COMMANDS = {
@@ -15,6 +15,7 @@ ALLOWED_COMMANDS = {
 # (min, max) = allowed range for VALUE
 PARAM_COMMANDS = {
     "grindingLevel": (0, 100),
+    "grainFlow": (0, 100),
 }
 
 
@@ -39,36 +40,29 @@ def build_message(action, extra):
     return None, f"Invalid action: {action}"
 
 
-
-@mqtt_bp.route('/api/mqtt/publish' , methods=['POST'])
+@mqtt_bp.route('/api/mqtt/publish', methods=['POST'])
 def handle_publish():
     data = request.get_json(silent=True) or {}
-    
-    
+
     serial_number = data.get('serial_number')
     action = data.get('action')
-    sub_topic = data.get('sub_topic' , 'control')
+    sub_topic = data.get('sub_topic', 'control')
     extra = data.get('payload') if isinstance(data.get('payload'), dict) else {}
-    
+
     if not serial_number:
         return jsonify({
             "success": False, "error": "serial_number is required"
-            }), 400
-        
-    message,error = build_message(action , extra)
-    
-    if error:
-          return jsonify({"success": False, "error": error}), 400
-        
+        }), 400
 
-    
-    
-    
+    message, error = build_message(action, extra)
+
+    if error:
+        return jsonify({"success": False, "error": error}), 400
+
     topic = f"{serial_number}/{sub_topic}"
-    
-  
+
     subscribe_to_device(serial_number)
-    
+
     if publish_message(topic, message):
         return jsonify({"success": True, "message": f"Published '{message}' to {topic}"}), 200
     return jsonify({"success": False, "error": "Failed to publish MQTT message"}), 500

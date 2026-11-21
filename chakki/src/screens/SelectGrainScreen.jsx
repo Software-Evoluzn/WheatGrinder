@@ -182,6 +182,7 @@ const SelectGrainScreen = ({ navigation, route }) => {
         grain: grain.id,
         grainCommand: grain.command,
         texture: grainConfig.default,
+        flowRate: grainConfig.defaultFlowRate,
       });
     } catch (e) {
       allowNavigationRef.current = false;

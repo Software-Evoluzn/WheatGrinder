@@ -11,16 +11,20 @@ import {
   StyleSheet,
   StatusBar,
   Platform,
-  ActivityIndicator, // <-- Added for loader
+  ActivityIndicator,
+  Linking,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Camera } from 'react-native-camera-kit';
 import Feather from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { io } from 'socket.io-client'; // <-- Added Socket.io
+import { io } from 'socket.io-client';
 import IP_CONFIG from '../services/ip.json';
 
 const base_url = IP_CONFIG.BASE_URL;
+
+// Apne AppNavigator ke main screen route name ke hisaab se yahan set karein (e.g. 'MainScreen' ya 'HomeScreen')
+const MAIN_SCREEN_ROUTE = 'Main';
 
 // =====================================================================
 // STEP 1: QR PARSER
@@ -46,8 +50,6 @@ const parseQR = (raw) => {
     macId: getValue(raw, 'MAC ID'),
   };
 
-  console.log('PARSED QR DATA: ', result);
-
   if (!result.serialNo) return null;
   return result;
 };
@@ -70,14 +72,14 @@ const formatDateForAPI = (date) => {
 };
 
 // =====================================================================
-// STEP 3: ONE-TIME SOCKET DEVICE STATUS CHECKER
+// STEP 3: ONE-TIME SOCKET DEVICE STATUS CHECKER (Polling-safe for Python 3.13)
 // =====================================================================
 const checkDeviceOnlineStatus = (serialNumber, timeoutMs = 5000) => {
   return new Promise((resolve) => {
     const sn = String(serialNumber).trim().toLowerCase();
 
     const socket = io(base_url, {
-      transports: ['websocket'],
+      transports: ['polling'], // Avoids Flask-SocketIO Werkzeug WebSocket upgrade ConnectionError
       reconnection: false,
     });
 
@@ -88,7 +90,6 @@ const checkDeviceOnlineStatus = (serialNumber, timeoutMs = 5000) => {
       resolve(isOnline);
     };
 
-    // Agar 5 sec tak response nahi aaya to offline maano
     const timer = setTimeout(() => {
       cleanup(false);
     }, timeoutMs);
@@ -110,7 +111,6 @@ const checkDeviceOnlineStatus = (serialNumber, timeoutMs = 5000) => {
       } else if (data.status === 'offline') {
         cleanup(false);
       }
-      // Baaki messages (cleaning_done etc.) ignore honge jab tak online/offline na mile
     });
   });
 };
@@ -128,7 +128,10 @@ const ProductRegistrationScreen = ({ navigation }) => {
   const [macId, setMacId] = useState('');
   const [customerId, setCustomerId] = useState(null);
 
-  // Loading state for register button
+  // Generated Invoice PDF URL state
+  const [generatedInvoiceUrl, setGeneratedInvoiceUrl] = useState(null);
+
+  // Loading state
   const [isRegistering, setIsRegistering] = useState(false);
 
   // Date
@@ -137,6 +140,11 @@ const ProductRegistrationScreen = ({ navigation }) => {
 
   const scanAnimation = useRef(new Animated.Value(0)).current;
   const hasScanned = useRef(false);
+
+  const isDeviceDetailsComplete =
+    productName.trim().length > 0 &&
+    serialNo.trim().length > 0 &&
+    macId.trim().length > 0;
 
   useEffect(() => {
     const fetchCustomerId = async () => {
@@ -167,7 +175,7 @@ const ProductRegistrationScreen = ({ navigation }) => {
         ])
       ).start();
     }
-  }, [isCameraActive]);
+  }, [isCameraActive, scanAnimation]);
 
   const startScanner = () => {
     hasScanned.current = false;
@@ -178,12 +186,9 @@ const ProductRegistrationScreen = ({ navigation }) => {
     if (hasScanned.current) return;
 
     const qrData = event.nativeEvent.codeStringValue;
-    console.log('QR Scanned: ', qrData);
-
     if (!qrData) return;
 
     const parsed = parseQR(qrData);
-
     if (!parsed) {
       Alert.alert('Invalid QR', 'QR Code format is not valid.');
       return;
@@ -195,7 +200,35 @@ const ProductRegistrationScreen = ({ navigation }) => {
     setMacId(parsed.macId);
 
     setIsCameraActive(false);
-    Alert.alert('Success', 'QR Code scanned successfully!');
+    Alert.alert('Success', 'QR Code scanned! Tap Register Product to auto-generate your invoice PDF.');
+  };
+
+  const goToMainScreen = (registeredSerial) => {
+    if (navigation?.reset) {
+      navigation.reset({
+        index: 0,
+        routes: [
+          {
+            name: MAIN_SCREEN_ROUTE,
+            params: { serialNumber: registeredSerial },
+          },
+        ],
+      });
+    } else {
+      navigation?.navigate(MAIN_SCREEN_ROUTE, { serialNumber: registeredSerial });
+    }
+  };
+
+  const handleOpenInvoicePdf = async (url, registeredSerial) => {
+    const targetUrl = url || generatedInvoiceUrl;
+    if (!targetUrl) return;
+    try {
+      await Linking.openURL(targetUrl);
+    } catch (e) {
+      Alert.alert('Error', 'Unable to open invoice PDF.');
+    } finally {
+      if (registeredSerial) goToMainScreen(registeredSerial);
+    }
   };
 
   // ---- Register button dabane par ----
@@ -222,10 +255,10 @@ const ProductRegistrationScreen = ({ navigation }) => {
           'Device is Offline',
           'Your device is currently offline, so it cannot be registered. Please turn on the device and connect it to Wi-Fi, then try again.'
         );
-        return; // <-- Yahin ruk jayega, API call nahi hogi
+        return;
       }
 
-      // 2. Agar device ONLINE hai, tabhi registration API call karo
+      // 2. Register Product + Auto-Generate Invoice PDF on Backend
       const response = await fetch(`${base_url}/register-product`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -246,10 +279,29 @@ const ProductRegistrationScreen = ({ navigation }) => {
           data.error || 'This device is already registered.'
         );
       } else if (response.ok) {
+        const cleanSerial = serialNo.trim();
+        await AsyncStorage.setItem('serial_number', cleanSerial);
+
+        const fullInvoiceUrl = data.invoice_path ? `${base_url}${data.invoice_path}` : null;
+        setGeneratedInvoiceUrl(fullInvoiceUrl);
+
         Alert.alert(
-          'Success',
-          data.message || 'Product Registered Successfully',
-          [{ text: 'OK', onPress: () => navigation?.goBack() }]
+          'Registered & Invoice Generated',
+          'Your product is registered and your Invoice PDF has been automatically generated!',
+          [
+            ...(fullInvoiceUrl
+              ? [
+                  {
+                    text: 'View Invoice PDF',
+                    onPress: () => handleOpenInvoicePdf(fullInvoiceUrl, cleanSerial),
+                  },
+                ]
+              : []),
+            {
+              text: 'Go to Main Screen',
+              onPress: () => goToMainScreen(cleanSerial),
+            },
+          ]
         );
       } else {
         Alert.alert('Registration Failed', data.error || 'Something went wrong.');
@@ -265,9 +317,6 @@ const ProductRegistrationScreen = ({ navigation }) => {
     }
   };
 
-  // ===================================================================
-  // UI
-  // ===================================================================
   return (
     <SafeAreaView style={styles.safeContainer}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
@@ -453,6 +502,33 @@ const ProductRegistrationScreen = ({ navigation }) => {
               }}
             />
           )}
+
+          {/* Auto Invoice Info Banner */}
+          {isDeviceDetailsComplete && (
+            <View style={styles.autoInvoiceCard}>
+              <View style={styles.pdfBadge}>
+                <Feather name="file-text" size={22} color="#522D70" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.autoInvoiceTitle}>
+                  {generatedInvoiceUrl ? 'Invoice PDF Ready' : 'Auto Invoice PDF'}
+                </Text>
+                <Text style={styles.autoInvoiceSub}>
+                  {generatedInvoiceUrl
+                    ? 'Tap below to view or download your invoice'
+                    : 'Invoice PDF will be generated automatically upon registration'}
+                </Text>
+              </View>
+              {generatedInvoiceUrl && (
+                <TouchableOpacity
+                  style={styles.viewPdfBtn}
+                  onPress={() => handleOpenInvoicePdf(generatedInvoiceUrl)}
+                >
+                  <Feather name="download" size={16} color="#FFFFFF" />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
 
         <Text style={styles.footerBranding}>POWERED BY EVOLUZN</Text>
@@ -463,7 +539,7 @@ const ProductRegistrationScreen = ({ navigation }) => {
         <TouchableOpacity
           style={[
             styles.primaryButton,
-            isRegistering && { opacity: 0.7 }, // Disabled visual effect
+            isRegistering && { opacity: 0.7 },
           ]}
           activeOpacity={0.88}
           onPress={handleRegister}
@@ -472,11 +548,11 @@ const ProductRegistrationScreen = ({ navigation }) => {
           {isRegistering ? (
             <>
               <ActivityIndicator size="small" color="#FFFFFF" />
-              <Text style={styles.primaryButtonText}>Checking Device...</Text>
+              <Text style={styles.primaryButtonText}>Generating Invoice...</Text>
             </>
           ) : (
             <>
-              <Text style={styles.primaryButtonText}>Register Product</Text>
+              <Text style={styles.primaryButtonText}>Register & Generate Invoice</Text>
               <Feather name="arrow-right" size={18} color="#FFFFFF" />
             </>
           )}
@@ -657,6 +733,43 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#0F172A',
+  },
+  autoInvoiceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3E8FF',
+    borderWidth: 1,
+    borderColor: '#D8B4FE',
+    borderRadius: 14,
+    padding: 14,
+    gap: 12,
+    marginTop: 4,
+  },
+  pdfBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  autoInvoiceTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#522D70',
+  },
+  autoInvoiceSub: {
+    fontSize: 12,
+    color: '#6B21A8',
+    marginTop: 2,
+  },
+  viewPdfBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#522D70',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   footerBranding: {
     textAlign: 'center',

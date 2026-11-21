@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View, Modal, Pressable } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Screen,
   MainHeader,
@@ -12,11 +13,10 @@ import {
   AppDialog,
 } from './ui';
 import { colors, spacing, radii, shadows, typography, layout } from './theme';
+import { getGrainConfig } from '../services/grainLevels';
+import { sendDeviceCommand } from '../services/deviceApi';
+import DeviceOfflineGuard from '../components/DeviceOfflineGuard';
 
-/* -------------------------------------------------------------------------- */
-/*  HeaderMenu — static overflow (kebab) menu. No API / no dynamic data.       */
-/*    Items are defined locally; "Help" opens a themed dialog with static text. */
-/* -------------------------------------------------------------------------- */
 const HeaderMenu = () => {
   const [open, setOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -79,33 +79,89 @@ const HeaderMenu = () => {
 };
 
 const SetFlowRate = ({ navigation, route }) => {
-  // --- functionality preserved exactly ---
-  const selectedGrain = route?.params?.grainName || 'WHEAT';
-  const selectedTexture = route?.params?.texture || 'MEDIUM';
-  const [flowRate, setFlowRate] = useState(50); // 10..100
+  const grainId = route?.params?.grain || route?.params?.grainId || 'wheat';
+  const grainConfig = getGrainConfig(grainId);
+
+  const selectedGrain = route?.params?.grainName || grainConfig?.label || grainId.toUpperCase();
+  const serialNumber = route?.params?.serialNumber;
+  const selectedTexture = route?.params?.texture || 'FINE';
+  const textureValue = route?.params?.textureValue;
+  const fromMilling = route?.params?.fromMilling;
+  const processState = route?.params?.processState;
+
+  const minLimit = grainConfig?.minFlowRate ?? 10;
+  const maxLimit = grainConfig?.maxFlowRate ?? 100;
+  const defaultRate = grainConfig?.defaultFlowRate ?? 50;
+
+  const initialRate = Number(route?.params?.flowRate ?? defaultRate);
+  const [flowRate, setFlowRate] = useState(
+    Math.min(maxLimit, Math.max(minLimit, initialRate))
+  );
+  const [sending, setSending] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleBack = () => {
     if (navigation?.goBack) navigation.goBack();
   };
-  const handleDecrease = () => setFlowRate((prev) => Math.max(10, prev - 10));
-  const handleIncrease = () => setFlowRate((prev) => Math.min(100, prev + 10));
-  const handleSet = () => {
-    navigation.navigate('MillingControlScreen', {
-      grainName: selectedGrain,
-      texture: selectedTexture,
-      flowRate: flowRate,
-    });
+
+  const handleDecrease = () => setFlowRate((prev) => Math.max(minLimit, prev - 5));
+  const handleIncrease = () => setFlowRate((prev) => Math.min(maxLimit, prev + 5));
+
+  const handleSet = async () => {
+    console.log('🔵 SET button pressed in SetFlowRate | flowRate:', flowRate);
+    if (sending) return;
+    setSending(true);
+
+    try {
+      const serial = serialNumber || (await AsyncStorage.getItem('serial_number'));
+      console.log('🔵 Resolved serial:', serial);
+
+      if (!serial) {
+        throw new Error('Machine serial number not found.');
+      }
+
+      const res = await sendDeviceCommand(serial, 'grainFlow', { value: Number(flowRate) });
+      console.log('🔵 sendDeviceCommand response:', res);
+
+      const isSuccess = res?.success || res?.status === 'success' || res?.status === 200;
+      if (!isSuccess) {
+        throw new Error(res?.error || res?.message || 'Could not send flow rate to machine');
+      }
+
+      if (fromMilling) {
+        navigation.navigate('MillingControlScreen', {
+          grain: grainId,
+          grainName: selectedGrain,
+          texture: selectedTexture,
+          textureValue,
+          flowRate,
+          serialNumber: serial,
+          processState,
+        });
+      } else {
+        navigation.navigate('GrainConfirmationScreen', {
+          grain: grainId,
+          grainName: selectedGrain,
+          texture: textureValue,
+          flowRate,
+          serialNumber: serial,
+        });
+      }
+    } catch (e) {
+      console.log('🔴 SetFlowRate error:', e);
+      setErrorMsg(e?.message || 'Failed to update flow rate.');
+    } finally {
+      setSending(false);
+    }
   };
 
   const segments = 10;
-  const active = Math.round(flowRate / 10);
+  const active = Math.round(((flowRate - minLimit) / (maxLimit - minLimit)) * segments);
 
   return (
     <Screen background={colors.background}>
-      {/* Header: same MainHeader structure/spacing as the rest of the flow.
-          Grain (static for this screen) takes the title slot; flow rate is
-          the live value, so it moves into a pill below rather than the
-          header subtitle slot — same pattern as SetGrindTexture. */}
+      <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
+
       <MainHeader
         greeting="My Kitchen Tools"
         title={selectedGrain.toUpperCase()}
@@ -115,43 +171,73 @@ const SetFlowRate = ({ navigation, route }) => {
 
       <View style={styles.flowPill}>
         <View style={styles.dot} />
-        <Text style={styles.flowPillText}>Flow rate · {flowRate}%</Text>
+        <Text style={styles.flowPillText}>
+          Flow rate · {flowRate}% (Default {defaultRate}%)
+        </Text>
       </View>
 
       <View style={styles.body}>
         <Eyebrow style={{ alignSelf: 'center' }}>Grinding flow rate</Eyebrow>
 
-        {/* Hero composition: same glow/ring shell as the rest of the flow,
-            wrapped around the existing value dial (real state, unchanged). */}
         <View style={styles.hero}>
           <View style={styles.glow} />
           <View style={styles.ringStatic} />
           <View style={styles.ringArc} />
           <View style={styles.valueCard}>
             <Text style={styles.valueLabel}>{flowRate}%</Text>
-            <Text style={styles.valueSub}>flow rate</Text>
+            <Text style={styles.valueSub}>max {maxLimit}%</Text>
           </View>
         </View>
 
         <View style={styles.stepperRow}>
-          <IconButton name="minus" onPress={handleDecrease} variant="ghost" size={24} accessibilityLabel="Decrease flow rate" />
+          <IconButton
+            name="minus"
+            onPress={handleDecrease}
+            disabled={sending}
+            variant="ghost"
+            size={24}
+            accessibilityLabel="Decrease flow rate"
+          />
           <View style={styles.segments}>
             {Array.from({ length: segments }).map((_, i) => (
               <View key={i} style={[styles.segment, i < active && styles.segmentActive]} />
             ))}
           </View>
-          <IconButton name="plus" onPress={handleIncrease} variant="ghost" size={24} accessibilityLabel="Increase flow rate" />
+          <IconButton
+            name="plus"
+            onPress={handleIncrease}
+            disabled={sending}
+            variant="ghost"
+            size={24}
+            accessibilityLabel="Increase flow rate"
+          />
         </View>
 
         <View style={styles.scaleLabels}>
-          <Text style={styles.scaleText}>LOW</Text>
-          <Text style={styles.scaleText}>HIGH</Text>
+          <Text style={styles.scaleText}>{minLimit}%</Text>
+          <Text style={styles.scaleText}>DEFAULT {defaultRate}%</Text>
+          <Text style={styles.scaleText}>{maxLimit}%</Text>
         </View>
       </View>
 
       <BottomActionBar>
-        <PrimaryButton title="SET" icon="check" onPress={handleSet} />
+        <PrimaryButton
+          title={sending ? 'SENDING...' : 'SET'}
+          icon="check"
+          onPress={handleSet}
+          disabled={sending}
+        />
       </BottomActionBar>
+
+      <AppDialog
+        visible={!!errorMsg}
+        onClose={() => setErrorMsg('')}
+        icon="alert-circle"
+        title="Couldn't set flow rate"
+        message={errorMsg}
+        confirmLabel="OK"
+        onConfirm={() => setErrorMsg('')}
+      />
     </Screen>
   );
 };
@@ -163,7 +249,6 @@ const center = (size) => (HERO - size) / 2;
 const DIAL = 200;
 
 const styles = StyleSheet.create({
-  // Overflow menu
   menuOverlay: {
     flex: 1,
     backgroundColor: 'transparent',
@@ -195,7 +280,6 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
 
-  // Live flow-rate pill — reflects real state, not decorative
   flowPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -224,7 +308,6 @@ const styles = StyleSheet.create({
 
   body: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing.xxl },
 
-  // Hero shell around the dial
   hero: {
     width: HERO,
     height: HERO,

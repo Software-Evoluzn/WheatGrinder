@@ -6,7 +6,8 @@ import { Screen, MainHeader, FootNote, AppDialog } from './ui';
 import { colors, spacing, radii, shadows } from './theme';
 import { sendDeviceCommand, fetchRegisteredSerialNumber } from '../services/deviceApi';
 import { getGrainConfig } from '../services/grainLevels';
-import DeviceOfflineGuard from '../components/DeviceOfflineGuard'; 
+import DeviceOfflineGuard from '../components/DeviceOfflineGuard';
+
 const resolveSerialNumber = async (route) => {
   const fromRoute = route?.params?.serialNumber;
   if (fromRoute) return fromRoute;
@@ -28,7 +29,6 @@ const resolveSerialNumber = async (route) => {
   return res.serial_number;
 };
 
-// Same FINE / MEDIUM / COARSE rule used in SetGrindTexture
 const getTextureLabel = (level, cfg) => {
   const min = cfg?.min ?? 0;
   const max = cfg?.max ?? 10;
@@ -53,15 +53,15 @@ const ActionCard = ({ label, icon, selected, onPress, disabled, subtitle }) => (
     <View style={[styles.actionIconWrap, selected && styles.actionIconWrapSelected]}>
       <Feather
         name={icon}
-        size={22}
+        size={20}
         color={selected ? colors.surface : colors.primary}
       />
     </View>
-    <Text style={[styles.actionLabel, selected && styles.actionLabelSelected]}>
+    <Text numberOfLines={1} style={[styles.actionLabel, selected && styles.actionLabelSelected]}>
       {label}
     </Text>
     {subtitle ? (
-      <Text style={[styles.actionSubtitle, selected && styles.actionSubtitleSelected]}>
+      <Text numberOfLines={1} style={[styles.actionSubtitle, selected && styles.actionSubtitleSelected]}>
         {subtitle}
       </Text>
     ) : null}
@@ -79,11 +79,13 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
   const textureLevel = Number(route?.params?.texture ?? grainConfig?.default ?? 5);
   const textureLabel = getTextureLabel(textureLevel, grainConfig);
 
+  // Flow rate percentage (from grainLevels.js defaultFlowRate)
+  const flowRate = Number(route?.params?.flowRate ?? grainConfig?.defaultFlowRate ?? 50);
+
   const [selectedOption, setSelectedOption] = useState(null);
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Clear the highlighted card when the user comes back to this screen
   useEffect(() => {
     const unsubscribe = navigation?.addListener?.('focus', () => setSelectedOption(null));
     return unsubscribe;
@@ -108,12 +110,13 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
       }
 
       navigation.navigate('MillingControlScreen', {
-        grain: grainId,              // id, used by SetGrindTexture / getGrainConfig
-        grainName,                   // display name
-        texture: textureLabel,       // label string: 'FINE' | 'MEDIUM' | 'COARSE'
-        textureValue: textureLevel,  // numeric level
+        grain: grainId,
+        grainName,
+        texture: textureLabel,
+        textureValue: textureLevel,
+        flowRate,
         serialNumber: serial,
-        processState: 'START',       // machine is already running
+        processState: 'START',
       });
     } catch (e) {
       setSelectedOption(null);
@@ -131,13 +134,28 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
       grainId,
       grainName,
       textureValue: textureLevel,
+      flowRate,
+      serialNumber,
+    });
+  };
+
+  const handleSetFlowRate = () => {
+    if (sending) return;
+    setSelectedOption('flowRate');
+    navigation.navigate('SetFlowRate', {
+      grain: grainId,
+      grainId,
+      grainName,
+      texture: textureLabel,
+      textureValue: textureLevel,
+      flowRate,
       serialNumber,
     });
   };
 
   return (
     <Screen background={colors.background}>
-         <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
+      <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
 
       <MainHeader
         greeting="Machine Setup"
@@ -157,14 +175,16 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
         <View style={styles.texturePill}>
           <View style={[styles.dot, sending && styles.dotActive]} />
           <Text style={styles.textureText}>
-            {sending ? 'COMMUNICATING...' : `Default Texture  •  ${textureLabel} (Level ${textureLevel})`}
+            {sending
+              ? 'COMMUNICATING...'
+              : `${textureLabel} (Lvl ${textureLevel})  •  Flow ${flowRate}%`}
           </Text>
         </View>
 
         <View style={styles.promptContainer}>
           <Text style={styles.question}>Ready to Grind?</Text>
           <Text style={styles.subQuestion}>
-            Start immediately with default settings or adjust grind texture.
+            Start with default settings or adjust texture & flow rate.
           </Text>
         </View>
 
@@ -174,7 +194,7 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
             onPress={handleStartProcess}
             icon="play"
             label={sending ? 'SENDING...' : 'START'}
-            subtitle="Begin grinding now"
+            subtitle="Begin now"
             disabled={sending}
           />
           <ActionCard
@@ -182,7 +202,15 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
             onPress={handleSetTexture}
             icon="sliders"
             label="TEXTURE"
-            subtitle="Adjust coarseness"
+            subtitle={`Level ${textureLevel}`}
+            disabled={sending}
+          />
+          <ActionCard
+            selected={selectedOption === 'flowRate'}
+            onPress={handleSetFlowRate}
+            icon="activity"
+            label="FLOW RATE"
+            subtitle={`${flowRate}%`}
             disabled={sending}
           />
         </View>
@@ -214,7 +242,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
   },
 
   /* Hero Badge */
@@ -303,14 +331,14 @@ const styles = StyleSheet.create({
   /* Action Cards */
   cardsRow: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.sm,
     alignSelf: 'stretch',
     justifyContent: 'center',
   },
   actionCard: {
     flex: 1,
     paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.xs,
     backgroundColor: colors.surface,
     borderRadius: radii.xl,
     borderWidth: 1.5,
@@ -331,23 +359,24 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   actionIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.primaryTint,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     overflow: 'hidden',
   },
   actionIconWrapSelected: {
     backgroundColor: colors.primary,
   },
   actionLabel: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '800',
     color: colors.textPrimary,
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
+    textAlign: 'center',
   },
   actionLabelSelected: {
     color: colors.primary,
@@ -356,6 +385,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textMuted,
     marginTop: 2,
+    textAlign: 'center',
   },
   actionSubtitleSelected: {
     color: colors.primary,
