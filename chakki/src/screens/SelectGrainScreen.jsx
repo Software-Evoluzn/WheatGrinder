@@ -14,7 +14,7 @@ import {
 } from './ui';
 import { colors, spacing, radii, shadows, typography, layout } from './theme';
 import { sendDeviceCommand, fetchRegisteredSerialNumber } from '../services/deviceApi';
-import DeviceOfflineGuard from '../components/DeviceOfflineGuard'; 
+import DeviceOfflineGuard from '../components/DeviceOfflineGuard';
 
 import { getGrainConfig } from '../services/grainLevels';
 
@@ -120,9 +120,6 @@ const SelectGrainScreen = ({ navigation, route }) => {
 
     try {
       setSending(true);
-      // const serialNumber = await resolveSerialNumber(route);
-      // console.log('Opening CleaningProcess screen:', serialNumber);
-
       navigation.navigate('CleaningProcessScreen', { serialNumber });
     } catch (e) {
       console.log('Clean stone error:', e);
@@ -143,15 +140,13 @@ const SelectGrainScreen = ({ navigation, route }) => {
 
     setSending(true);
     try {
-      const serialNumber = await resolveSerialNumber(route);   // uncomment
+      const serialNumber = await resolveSerialNumber(route);
 
       const res = await sendDeviceCommand(serialNumber, grain.command);
       const isSuccess = res?.success || res?.status === 'success' || res?.status === 200;
       if (!isSuccess) {
         throw new Error(res?.error || res?.message || 'Could not send grain selection to machine');
       }
-
-      //Grain config fetch karein
 
       const grainConfig = getGrainConfig(grain.id);
 
@@ -167,9 +162,10 @@ const SelectGrainScreen = ({ navigation, route }) => {
       setSending(false);
     }
   };
+
   return (
     <Screen background={colors.background}>
-         <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
+      <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
       <MainHeader
         greeting="Machine Setup"
         title="Select Grain"
@@ -194,7 +190,9 @@ const SelectGrainScreen = ({ navigation, route }) => {
               >
                 <View style={[styles.thumbWrap, isSelected && styles.thumbWrapSelected]}>
                   {item.isOthers ? (
-                    <Feather name="more-horizontal" size={24} color={isSelected ? colors.textOnPrimary : colors.primary} />
+                    // FIX: always purple so the dots stay visible on the white
+                    // (selected) circle — previously white-on-white = invisible
+                    <Feather name="more-horizontal" size={44} color={colors.primary} />
                   ) : (
                     <Image source={item.image} style={styles.thumb} resizeMode="contain" />
                   )}
@@ -211,12 +209,10 @@ const SelectGrainScreen = ({ navigation, route }) => {
             );
           })}
         </View>
-
-        {/* <Text style={styles.footer}>Powered by EVOLUZN</Text> */}
       </ScrollView>
 
       <BottomActionBar>
-        <View style={[styles.actions , {marginTop:-10}]}>
+        <View style={[styles.actions, { marginTop: -10 }]}>
           <SecondaryButton
             title="CLEAN STONE"
             fullWidth={false}
@@ -284,8 +280,8 @@ const styles = StyleSheet.create({
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   card: {
-    width: '31%',
-    aspectRatio: 0.86,
+    width: '48%',
+    aspectRatio: 0.9,
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
     borderWidth: 1.5,
@@ -298,17 +294,18 @@ const styles = StyleSheet.create({
   },
   cardSelected: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
   thumbWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 128,
+    height: 128,
+    borderRadius: 64,
     backgroundColor: colors.primaryTint,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
+    overflow: 'hidden',
   },
   thumbWrapSelected: { backgroundColor: colors.surface },
-  thumb: { width: 40, height: 40 },
-  label: { fontSize: 11, fontWeight: '700', color: colors.textSecondary, letterSpacing: 0.4, textAlign: 'center' },
+  thumb: { width: 118, height: 118 },
+  label: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, letterSpacing: 0.4, textAlign: 'center' },
   labelSelected: { color: colors.primary },
   checkDot: {
     position: 'absolute',

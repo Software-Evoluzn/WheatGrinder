@@ -190,6 +190,36 @@ export const SecondaryButton = ({ title, onPress, icon, disabled = false, fullWi
 };
 
 /* -------------------------------------------------------------------------- */
+/*  PillButton — compact rounded action (e.g. "Add Product" in a header)        */
+/* -------------------------------------------------------------------------- */
+export const PillButton = ({ title, onPress, icon = 'plus', variant = 'solid', style }) => {
+  const { scale, onPressIn, onPressOut } = usePressScale();
+  const isSolid = variant === 'solid';
+  return (
+    <Animated.View style={[{ transform: [{ scale }] }, style]}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        style={[styles.pillBtn, isSolid ? styles.pillBtnSolid : styles.pillBtnGhost]}
+      >
+        {!!icon && (
+          <Feather
+            name={icon}
+            size={16}
+            color={isSolid ? colors.textOnPrimary : colors.primary}
+            style={{ marginRight: 6 }}
+          />
+        )}
+        <Text style={[styles.pillBtnText, !isSolid && { color: colors.primary }]}>{title}</Text>
+      </Pressable>
+    </Animated.View>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
 /*  Card & SelectableCard                                                       */
 /* -------------------------------------------------------------------------- */
 export const Card = ({ children, style, padded = true }) => (
@@ -486,14 +516,14 @@ export const SetupHeader = ({ title, subtitle, onBack, step, totalSteps, right, 
 /*  BottomActionBar — fixed, safe-area-aware action area                        */
 /*    Styles ONLY the actions a screen already has. Pass buttons as children.   */
 /* -------------------------------------------------------------------------- */
-export const BottomActionBar = ({ children, divider = true, style }) => {
+export const BottomActionBar = ({ children, divider = true, lift = 80, style }) => {
   const insets = useSafeAreaInsets();
   return (
     <View
       style={[
         styles.bottomBar,
         divider && styles.bottomBarDivider,
-        { paddingBottom: Math.max(insets.bottom, spacing.lg) },
+        { paddingBottom: Math.max(insets.bottom, spacing.lg) + lift },
         style,
       ]}
     >
@@ -620,6 +650,19 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     ...shadows.card,
   },
+
+  /* Pill button */
+  pillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 36,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.pill,
+  },
+  pillBtnSolid: { backgroundColor: colors.primary, ...shadows.button },
+  pillBtnGhost: { backgroundColor: colors.primaryTint, borderWidth: 1, borderColor: colors.primaryTintBorder },
+  pillBtnText: { fontSize: 13, fontWeight: '800', letterSpacing: 0.3, color: colors.textOnPrimary },
 
   /* Selectable card */
   selCard: {
@@ -813,6 +856,7 @@ export default {
   StepIndicator,
   PrimaryButton,
   SecondaryButton,
+  PillButton,
   Card,
   SelectableCard,
   StatusBadge,

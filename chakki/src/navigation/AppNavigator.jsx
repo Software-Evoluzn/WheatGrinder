@@ -31,6 +31,7 @@ import VerifyOtpScreen from '../screens/VerifyOtpScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import ResetPasswordScreen from '../screens/ResetPasswordScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import ProductRegistrationScreen from '../screens/ProductRegistrationScreen';
 import { StackActions } from '@react-navigation/native';
 
 
@@ -77,7 +78,7 @@ const AppNavigator = () => {
       <Stack.Screen name='ForgotPasswordScreen' component={ForgotPasswordScreen}/>
       <Stack.Screen name='ResetPasswordScreen' component={ResetPasswordScreen}/>
       <Stack.Screen name='SettingsScreen' component={SettingsScreen}/>
-      
+      <Stack.Screen name="Product Register" component={ProductRegistrationScreen} />
 
     
     </Stack.Navigator>

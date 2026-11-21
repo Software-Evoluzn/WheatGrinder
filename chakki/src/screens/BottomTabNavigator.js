@@ -99,7 +99,7 @@ export default function BottomNavigator({route}) {
       screenOptions={{ headerShown: false }}
     >
       <Tab.Screen name="Home" component={HomeScreen} initialParams={{customer_id : customerId}} />
-      <Tab.Screen name="ProductRegister" component={ProductRegistrationScreen} />
+      {/* <Tab.Screen name="ProductRegister" component={ProductRegistrationScreen} /> */}
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );

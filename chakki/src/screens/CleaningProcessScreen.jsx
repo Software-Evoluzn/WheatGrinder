@@ -2,10 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Easing, Modal, Pressable } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import io from 'socket.io-client';
-import IP_CONFIG from '../services/ip.json'; // Socket IP config
+// import io from 'socket.io-client';
+// import IP_CONFIG from '../services/ip.json'; // Socket IP config
 import DeviceOfflineGuard from '../components/DeviceOfflineGuard';
- 
 
 import {
   Screen,
@@ -18,7 +17,8 @@ import {
 } from './ui';
 import { colors, spacing, typography, radii, shadows, layout } from './theme';
 
-const SOCKET_URL = IP_CONFIG.BASE_URL;
+const BRAND_GREEN = '#7DC24d';
+// const SOCKET_URL = IP_CONFIG.BASE_URL;
 const DONE_HOLD_MS = 2500;
 const NEXT_ROUTE = 'SelectGrain';
 
@@ -158,78 +158,84 @@ const CleaningProcessScreen = ({ navigation, route }) => {
   useEffect(() => {
     if (phase !== 'progress') return;
     const timer = setInterval(() => {
-      setProgress((prev) => (prev < 90 ? prev + 5 : prev));
-    }, 2000);
+      setProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(timer);
+          setPhase('done');
+          return 100;
+        }
+        return Math.min(100, prev + 20);
+      });
+    }, 600);
     return () => clearInterval(timer);
   }, [phase]);
 
-  // Real-time Socket Listener for Direct MQTT Status
-  // Real-time Socket Listener for Dedicated Cleaning Event
-  // Real-time Socket Listener for Cleaning Completion
-  useEffect(() => {
-    const socket = io(SOCKET_URL, {
-      transports: ['websocket'],
-      reconnection: true,
-    });
+  // Real-time Socket Listener for Direct MQTT Status (commented out for frontend testing)
+  // useEffect(() => {
+  //   const socket = io(SOCKET_URL, {
+  //     transports: ['websocket'],
+  //     reconnection: true,
+  //   });
+  //
+  //   const normalizeSerial = (value) =>
+  //     String(value || '')
+  //       .replace(/[{}]/g, '')
+  //       .trim()
+  //       .toLowerCase();
+  //
+  //   const handleCleaningDone = (data) => {
+  //     console.log('⚡ Cleaning status received:', data);
+  //
+  //     const incomingId = normalizeSerial(data?.serial_number);
+  //     const currentId = normalizeSerial(serialNumber);
+  //
+  //     console.log('📱 Current Serial:', currentId);
+  //     console.log('📡 Incoming Serial:', incomingId);
+  //
+  //     // Only process cleaning_done
+  //     if (data?.status !== 'cleaning_done') {
+  //       return;
+  //     }
+  //
+  //     // Match device serial number
+  //     if (
+  //       !currentId ||
+  //       incomingId === currentId ||
+  //       incomingId.includes(currentId) ||
+  //       currentId.includes(incomingId)
+  //     ) {
+  //       console.log('✅ SELF CLEANING DONE');
+  //       console.log('➡️ Moving to done state...');
+  //
+  //       setProgress(100);
+  //       setPhase('done');
+  //     }
+  //   };
+  //
+  //   socket.on('connect', () => {
+  //     console.log('⚡ Socket connected:', socket.id);
+  //
+  //     // Ask backend if cleaning was already completed
+  //     if (serialNumber) {
+  //       socket.emit('check_cleaning', {
+  //         serial_number: serialNumber,
+  //       });
+  //     }
+  //   });
+  //
+  //   socket.on('cleaning_status_update', handleCleaningDone);
+  //
+  //   socket.on('connect_error', (error) => {
+  //     console.log('❌ Socket connection error:', error.message);
+  //   });
+  //
+  //   return () => {
+  //     console.log('🔌 Cleaning socket disconnected');
+  //     socket.off('cleaning_status_update', handleCleaningDone);
+  //     socket.disconnect();
+  //   };
+  // }, [serialNumber]);
 
-    const normalizeSerial = (value) =>
-      String(value || '')
-        .replace(/[{}]/g, '')
-        .trim()
-        .toLowerCase();
-
-    const handleCleaningDone = (data) => {
-      console.log('⚡ Cleaning status received:', data);
-
-      const incomingId = normalizeSerial(data?.serial_number);
-      const currentId = normalizeSerial(serialNumber);
-
-      console.log('📱 Current Serial:', currentId);
-      console.log('📡 Incoming Serial:', incomingId);
-
-      // Only process cleaning_done
-      if (data?.status !== 'cleaning_done') {
-        return;
-      }
-
-      // Match device serial number
-      if (
-        !currentId ||
-        incomingId === currentId ||
-        incomingId.includes(currentId) ||
-        currentId.includes(incomingId)
-      ) {
-        console.log('✅ SELF CLEANING DONE');
-        console.log('➡️ Moving to done state...');
-
-        setProgress(100);
-        setPhase('done');
-      }
-    };
-
-    socket.on('connect', () => {
-      console.log('⚡ Socket connected:', socket.id);
-
-      // Ask backend if cleaning was already completed
-      if (serialNumber) {
-        socket.emit('check_cleaning', {
-          serial_number: serialNumber,
-        });
-      }
-    });
-
-    socket.on('cleaning_status_update', handleCleaningDone);
-
-    socket.on('connect_error', (error) => {
-      console.log('❌ Socket connection error:', error.message);
-    });
-
-    return () => {
-      console.log('🔌 Cleaning socket disconnected');
-      socket.off('cleaning_status_update', handleCleaningDone);
-      socket.disconnect();
-    };
-  }, [serialNumber]);
   // Handle Done animation & Auto-navigation
   useEffect(() => {
     if (phase !== 'done') return undefined;
@@ -257,7 +263,6 @@ const CleaningProcessScreen = ({ navigation, route }) => {
   if (phase === 'done') {
     return (
       <Screen background={colors.background} edges={['top', 'left', 'right', 'bottom']}>
-        
         <MainHeader greeting="Machine Status" title="Cleaning Process" onBack={undefined} right={<HeaderMenu />} />
 
         <View style={styles.centerContent}>
@@ -281,7 +286,12 @@ const CleaningProcessScreen = ({ navigation, route }) => {
         <Text style={styles.title}>Cleaning process</Text>
         <Text style={styles.percent}>{progress}% completed</Text>
 
-        <ProgressBar value={progress} height={46} style={{ marginTop: spacing.xl, alignSelf: 'stretch' }} />
+        <ProgressBar
+          value={progress}
+          height={46}
+          fillColor={BRAND_GREEN}
+          style={{ marginTop: spacing.xl, alignSelf: 'stretch' }}
+        />
 
         <StatusBadge label="Please wait" variant="info" icon="loader" style={{ marginTop: spacing.huge, alignSelf: 'center' }} />
       </View>
@@ -327,7 +337,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing.xxl,
     alignItems: 'center',
-    justifyContent: 'center', // Fix: typo 'justify' fixed to 'justifyContent'
+    justifyContent: 'center',
   },
   centerContent: {
     flex: 1,

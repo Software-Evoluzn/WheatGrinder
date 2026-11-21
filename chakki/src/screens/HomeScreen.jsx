@@ -14,9 +14,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { io } from 'socket.io-client';
 import { useAppTheme } from '../services/theme';
 import { colors, spacing, radii, typography, shadows, layout } from './theme';
-import { MainHeader, Eyebrow, StatusBadge, PrimaryButton } from './ui';
 import IP_CONFIG from '../services/ip.json';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MainHeader, Eyebrow, StatusBadge, PrimaryButton, PillButton, IconButton } from './ui';
+
 
 const API_BASE_URL = IP_CONFIG.BASE_URL;
 
@@ -30,41 +31,41 @@ const HomeScreen = ({ navigation, route }) => {
 
     // Fetch user's registered devices list
     // HomeScreen.js me fetchUserDevices update karein
-const fetchUserDevices = async (silent = false) => {
-    try {
-        if (!silent) setLoading(true);
+    const fetchUserDevices = async (silent = false) => {
+        try {
+            if (!silent) setLoading(true);
 
-        let customerId = route?.params?.customer_id;
-        if (!customerId) {
-            customerId = await AsyncStorage.getItem('customer_id');
-        }
-        if (!customerId) return;
-
-        const response = await fetch(`${API_BASE_URL}/customer-products/${customerId}`);
-        const data = await response.json();
-
-        if (response.ok) {
-            const fetchedDevices = (data.devices || []).map(dev => ({
-                ...dev,
-                // Make sure is_online from DB maps correctly on initial load
-                status: dev.is_online === 1 || dev.status === 'online' ? 'online' : 'offline'
-            }));
-            
-            setDevices(fetchedDevices);
-
-            if (socketRef.current && socketRef.current.connected) {
-                fetchedDevices.forEach((dev) => {
-                    socketRef.current.emit('get_device_status', { serial_number: dev.serial_number });
-                });
+            let customerId = route?.params?.customer_id;
+            if (!customerId) {
+                customerId = await AsyncStorage.getItem('customer_id');
             }
+            if (!customerId) return;
+
+            const response = await fetch(`${API_BASE_URL}/customer-products/${customerId}`);
+            const data = await response.json();
+
+            if (response.ok) {
+                const fetchedDevices = (data.devices || []).map(dev => ({
+                    ...dev,
+                    // Make sure is_online from DB maps correctly on initial load
+                    status: dev.is_online === 1 || dev.status === 'online' ? 'online' : 'offline'
+                }));
+
+                setDevices(fetchedDevices);
+
+                if (socketRef.current && socketRef.current.connected) {
+                    fetchedDevices.forEach((dev) => {
+                        socketRef.current.emit('get_device_status', { serial_number: dev.serial_number });
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching devices:', error);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
         }
-    } catch (error) {
-        console.error('Error fetching devices:', error);
-    } finally {
-        setLoading(false);
-        setRefreshing(false);
-    }
-};
+    };
 
     // 2. Real-Time Socket setup for status updates
     useEffect(() => {
@@ -89,7 +90,7 @@ const fetchUserDevices = async (silent = false) => {
         // Listen for real-time status changes
         socket.on('device_status_update', ({ serial_number, status }) => {
             if (!serial_number) return;
-             if (status !== 'online' && status !== 'offline') return; // ignore raw messages
+            if (status !== 'online' && status !== 'offline') return; // ignore raw messages
 
             setDevices((prevDevices) =>
                 prevDevices.map((device) =>
@@ -217,10 +218,22 @@ const fetchUserDevices = async (silent = false) => {
             <MainHeader
                 greeting="Welcome back"
                 title="MY DEVICES"
-                actionIcon="user"
-                onAction={() => navigation?.navigate('SettingsScreen')}
+                right={
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                        <PillButton
+                            title="Add Product"
+                            icon="plus"
+                            onPress={() => navigation.navigate('Product Register')}
+                        />
+                        <IconButton
+                            name="user"
+                            variant="solid"
+                            onPress={() => navigation?.navigate('SettingsScreen')}
+                            accessibilityLabel="Settings"
+                        />
+                    </View>
+                }
             />
-
             {loading ? (
                 <View style={styles.centerContainer}>
                     <ActivityIndicator size="large" color={colors.primary} />

@@ -490,8 +490,7 @@ const styles = StyleSheet.create({
   },
 
   poweredText: {
-    position: 'absolute',
-    bottom: 8,
+    marginTop: 24,
     color: '#B5A5C7',
     fontSize: 14,
     fontWeight: '500',
