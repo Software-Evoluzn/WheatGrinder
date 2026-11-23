@@ -18,7 +18,8 @@ import IP_CONFIG from '../services/ip.json';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MainHeader, Eyebrow, StatusBadge, PrimaryButton, PillButton, IconButton } from './ui';
 
-
+const BRAND_GREEN = '#7DC24d';
+const ADD_PRODUCT_PURPLE = '#55327A';
 const API_BASE_URL = IP_CONFIG.BASE_URL;
 
 const HomeScreen = ({ navigation, route }) => {
@@ -223,6 +224,7 @@ const HomeScreen = ({ navigation, route }) => {
                         <PillButton
                             title="Add Product"
                             icon="plus"
+                            buttonStyle={styles.addProductButton}
                             onPress={() => navigation.navigate('Product Register')}
                         />
                         <IconButton
@@ -276,6 +278,10 @@ const styles = StyleSheet.create({
     safe: {
         flex: 1,
         backgroundColor: colors.background,
+    },
+    addProductButton: {
+        backgroundColor: ADD_PRODUCT_PURPLE,
+        borderColor: ADD_PRODUCT_PURPLE,
     },
     scrollContent: {
         paddingHorizontal: layout.screenPaddingHorizontal,

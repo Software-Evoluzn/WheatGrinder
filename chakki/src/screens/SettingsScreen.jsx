@@ -15,10 +15,12 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import Feather from 'react-native-vector-icons/Feather';
 import { useAppTheme } from '../services/theme';
-import { getStoredUser, logoutUser,getCustomerProductCount } from '../services/AuthService'; // adjust path if needed
+import { getStoredUser, logoutUser, getCustomerProductCount } from '../services/AuthService';
 
 import { colors, spacing, radii, typography, shadows, layout } from './theme';
 import { Screen, MainHeader, Card, SecondaryButton } from './ui';
+
+const BRAND_GREEN = '#7DC24d';
 
 const SettingsScreen = ({ navigation }) => {
   const { isDark } = useAppTheme();
@@ -229,9 +231,9 @@ const SettingsScreen = ({ navigation }) => {
               </Text>
             </View>
 
-            <View style={styles.divider} />
+            {/* <View style={styles.divider} /> */}
 
-            <Pressable
+            {/* <Pressable
               style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.7 }]}
               onPress={() => navigation.navigate('EditProfile', { user })}
               accessibilityRole="button"
@@ -243,7 +245,7 @@ const SettingsScreen = ({ navigation }) => {
                 <Text style={styles.linkRowText}>Edit Profile</Text>
               </View>
               <Feather name="chevron-right" size={20} color={colors.textMuted} />
-            </Pressable>
+            </Pressable> */}
           </Card>
         </View>
 
@@ -382,7 +384,7 @@ const SettingsScreen = ({ navigation }) => {
           onPress={handleLogout}
           accessibilityRole="button"
         >
-          <Feather name="log-out" size={18} color={colors.danger} style={styles.logoutIcon} />
+          <Feather name="log-out" size={18} color="#FFFFFF" style={styles.logoutIcon} />
           <Text style={styles.logoutText}>Logout</Text>
         </Pressable>
 
@@ -393,7 +395,6 @@ const SettingsScreen = ({ navigation }) => {
 };
 
 export default SettingsScreen;
-// Keep your existing `const styles = StyleSheet.create({...})` below
 
 const styles = StyleSheet.create({
   container: {
@@ -671,9 +672,9 @@ const styles = StyleSheet.create({
   logoutButton: {
     marginTop: spacing.sm,
     marginBottom: spacing.xxl,
-    backgroundColor: colors.surface,
+    backgroundColor: BRAND_GREEN,
     borderWidth: 1,
-    borderColor: colors.dangerTint,
+    borderColor: BRAND_GREEN,
     paddingVertical: spacing.lg,
     borderRadius: radii.lg,
     flexDirection: 'row',
@@ -684,7 +685,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   logoutText: {
-    color: colors.danger,
+    color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 15,
   },

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, Pressable, Modal, ActivityIndicator, BackHandler } from 'react-native';
+import { StyleSheet, Text, View, Pressable, Modal, ActivityIndicator, BackHandler, Animated, Easing } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -66,6 +66,182 @@ const HeaderMenu = () => {
   );
 };
 
+/* Animated Control Button Component */
+const ControlButton = ({ active, icon, label, onPress, disabled, iconNudge = 0, variant = 'default' }) => {
+  const isStart = variant === 'start';
+
+  // Animation values
+  const pressScale = useRef(new Animated.Value(1)).current;
+  const idlePulse = useRef(new Animated.Value(1)).current;
+  const rippleScale = useRef(new Animated.Value(1)).current;
+  const rippleOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!isStart) return;
+
+    let pulseLoop = null;
+    let rippleLoop = null;
+
+    if (active) {
+      // Stop idle breathing
+      idlePulse.setValue(1);
+
+      // Start active expanding radar ring animation
+      rippleScale.setValue(1);
+      rippleOpacity.setValue(0.55);
+
+      rippleLoop = Animated.loop(
+        Animated.parallel([
+          Animated.timing(rippleScale, {
+            toValue: 1.38,
+            duration: 1600,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(rippleOpacity, {
+            toValue: 0,
+            duration: 1600,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      rippleLoop.start();
+    } else if (!disabled) {
+      // Reset active ripple
+      rippleOpacity.setValue(0);
+      rippleScale.setValue(1);
+
+      // Subtle professional breathing pulse when ready to start
+      pulseLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(idlePulse, {
+            toValue: 1.045,
+            duration: 1300,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(idlePulse, {
+            toValue: 1,
+            duration: 1300,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulseLoop.start();
+    } else {
+      idlePulse.setValue(1);
+      rippleOpacity.setValue(0);
+    }
+
+    return () => {
+      if (pulseLoop) pulseLoop.stop();
+      if (rippleLoop) rippleLoop.stop();
+    };
+  }, [isStart, active, disabled, idlePulse, rippleScale, rippleOpacity]);
+
+  const handlePressIn = () => {
+    Animated.spring(pressScale, {
+      toValue: 0.92,
+      speed: 35,
+      bounciness: 4,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(pressScale, {
+      toValue: 1,
+      speed: 25,
+      bounciness: 8,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const iconColor = active
+    ? '#FFFFFF'
+    : isStart
+      ? '#16A34A'
+      : colors.textMuted;
+
+  return (
+    <View style={styles.controlItem}>
+      <View style={styles.circleWrapper}>
+        {/* Expanding Emerald Ripple Ring when START is running */}
+        {isStart && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.rippleRing,
+              {
+                opacity: rippleOpacity,
+                transform: [{ scale: rippleScale }],
+              },
+            ]}
+          />
+        )}
+
+        <Animated.View
+          style={{
+            transform: [
+              { scale: pressScale },
+              ...(isStart ? [{ scale: idlePulse }] : []),
+            ],
+          }}
+        >
+          <Pressable
+            onPress={onPress}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            disabled={disabled}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active, busy: disabled }}
+            style={[
+              styles.outerCircle,
+              isStart
+                ? active
+                  ? styles.startOuterActive
+                  : styles.startOuterDefault
+                : active
+                  ? styles.outerActive
+                  : styles.outerDefault,
+            ]}
+          >
+            <View
+              style={[
+                styles.innerCircle,
+                isStart
+                  ? active
+                    ? styles.startInnerActive
+                    : styles.startInnerDefault
+                  : active && styles.innerActive,
+              ]}
+            >
+              <Feather
+                name={icon}
+                size={34}
+                color={iconColor}
+                style={{ marginLeft: iconNudge }}
+              />
+            </View>
+          </Pressable>
+        </Animated.View>
+      </View>
+
+      <Text
+        style={[
+          styles.controlLabel,
+          isStart && !active && styles.startLabelDefault,
+          active && (isStart ? styles.startLabelActive : styles.controlLabelActive),
+        ]}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+};
+
 const resolveSerialNumber = async (route) => {
   const fromRoute = route?.params?.serialNumber;
   if (fromRoute) return fromRoute;
@@ -111,16 +287,11 @@ const MillingControlScreen = ({ navigation, route }) => {
   const sending = pendingAction !== null;
   const textureLocked = sending || isLoading;
 
-  // Back kab block hona chahiye:
-  // Jab machine START ho, ya START/PAUSE command send/wait ho rahi ho.
-  // Jab processState === 'PAUSE' ho (aur loading khatam ho) ya null (Ready) ho, tab back allowed hai.
   const isBackBlocked = processState === 'START' || sending || isLoading;
 
-  // Latest state ko ref mein rakhna taaki beforeRemove aur BackHandler ko hamesha fresh value mile
   const isBackBlockedRef = useRef(isBackBlocked);
   isBackBlockedRef.current = isBackBlocked;
 
-  // Serial number pehle hi resolve kar lo
   useEffect(() => {
     resolveSerialNumber(route)
       .then((sn) => { serialRef.current = sn; })
@@ -133,7 +304,6 @@ const MillingControlScreen = ({ navigation, route }) => {
     if (incoming !== undefined) setProcessState(incoming);
   }, [route?.params?.processState]);
 
-  // Back button / swipe-back interception
   useEffect(() => {
     navigation?.setOptions?.({
       gestureEnabled: !isBackBlocked,
@@ -147,7 +317,6 @@ const MillingControlScreen = ({ navigation, route }) => {
       }
 
       const actionType = e?.data?.action?.type;
-      // Programmatic RESET / NAVIGATE (e.g., Home button ya Offline guard) ko allow karein
       if (actionType === 'RESET' || actionType === 'NAVIGATE' || actionType === 'REPLACE') {
         setBackWarningOpen(false);
         return;
@@ -171,7 +340,6 @@ const MillingControlScreen = ({ navigation, route }) => {
     };
   }, [navigation]);
 
-  // Real-time MQTT Socket.IO status listener
   useEffect(() => {
     const socket = io(SOCKET_URL, {
       transports: ['websocket'],
@@ -186,7 +354,6 @@ const MillingControlScreen = ({ navigation, route }) => {
       console.log('Socket error:', e.message);
     });
 
-    // Sirf tab PAUSE active hoga jab device ka pause screen message aaye
     socket.on('pause_status_update', (data) => {
       console.log('Pause update:', data);
 
@@ -296,23 +463,6 @@ const MillingControlScreen = ({ navigation, route }) => {
     }
   };
 
-  const Control = ({ active, icon, label, onPress, iconNudge = 0 }) => (
-    <View style={styles.controlItem}>
-      <Pressable
-        onPress={onPress}
-        disabled={sending || isLoading}
-        accessibilityRole="button"
-        accessibilityState={{ selected: active, busy: sending || isLoading }}
-        style={[styles.outerCircle, active ? styles.outerActive : styles.outerDefault]}
-      >
-        <View style={[styles.innerCircle, active && styles.innerActive]}>
-          <Feather name={icon} size={34} color={active ? colors.textOnPrimary : colors.textMuted} style={{ marginLeft: iconNudge }} />
-        </View>
-      </Pressable>
-      <Text style={[styles.controlLabel, active && styles.controlLabelActive]}>{label}</Text>
-    </View>
-  );
-
   const statusLabel =
     isLoading ? 'Please Wait...'
     : pendingAction === 'START' ? 'Starting'
@@ -321,7 +471,6 @@ const MillingControlScreen = ({ navigation, route }) => {
     : processState === 'PAUSE' ? 'Paused'
     : 'Ready';
 
-  // Dynamic warning message based on whether machine is running or pausing
   const backWarningTitle =
     pendingAction === 'PAUSE' || isLoading ? 'Pausing Machine' : 'Milling in Progress';
 
@@ -369,17 +518,17 @@ const MillingControlScreen = ({ navigation, route }) => {
             onPress={handleEditTexture}
             disabled={textureLocked}
             accessibilityRole="button"
-            accessibilityLabel={`Texture: ${selectedTexture}. Tap to edit`}
+            accessibilityLabel={`Current texture: ${selectedTexture}. Tap to change texture`}
             accessibilityState={{ disabled: textureLocked }}
             style={({ pressed }) => [
-              styles.configChip,
-              pressed && { opacity: 0.7 },
+              styles.changeTextureBtn,
+              pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] },
               textureLocked && { opacity: 0.5 },
             ]}
           >
-            <Feather name="sliders" size={14} color={colors.primary} style={{ marginRight: spacing.sm }} />
-            <Text style={styles.configText}>{selectedTexture}</Text>
-            <Feather name="edit-2" size={13} color={colors.primary} style={{ marginLeft: spacing.sm }} />
+            <Feather name="sliders" size={16} color={colors.primary} style={{ marginRight: spacing.sm }} />
+            <Text style={styles.changeTextureText}>CHANGE TEXTURE</Text>
+            <Feather name="chevron-right" size={16} color={colors.primary} style={{ marginLeft: spacing.xs }} />
           </Pressable>
         </View>
 
@@ -388,8 +537,22 @@ const MillingControlScreen = ({ navigation, route }) => {
         </Text>
 
         <View style={styles.controlsRow}>
-          <Control active={processState === 'START'} icon="play" label="START" onPress={handleToggleStart} iconNudge={4} />
-          <Control active={processState === 'PAUSE'} icon="pause" label="PAUSE" onPress={handleTogglePause} />
+          <ControlButton
+            variant="start"
+            active={processState === 'START'}
+            disabled={sending || isLoading}
+            icon="play"
+            label="START"
+            onPress={handleToggleStart}
+            iconNudge={4}
+          />
+          <ControlButton
+            active={processState === 'PAUSE'}
+            disabled={sending || isLoading}
+            icon="pause"
+            label="PAUSE"
+            onPress={handleTogglePause}
+          />
         </View>
       </View>
 
@@ -456,7 +619,14 @@ const styles = StyleSheet.create({
 
   body: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xxl },
 
-  configRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.huge },
+  configRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.huge,
+  },
   configChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -468,10 +638,39 @@ const styles = StyleSheet.create({
     borderColor: colors.primaryTintBorder,
   },
   configText: { fontSize: 13, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 },
-
+  changeTextureBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primaryTint,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    ...shadows.subtle,
+  },
+  changeTextureText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: 0.6,
+  },
   prompt: { ...typography.subtitle, color: colors.textSecondary, marginBottom: spacing.huge, textAlign: 'center' },
   controlsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 44 },
   controlItem: { alignItems: 'center' },
+  circleWrapper: {
+    width: 108,
+    height: 108,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rippleRing: {
+    position: 'absolute',
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    backgroundColor: '#22C55E',
+  },
   outerCircle: { width: 104, height: 104, borderRadius: 52, alignItems: 'center', justifyContent: 'center' },
   outerDefault: { backgroundColor: colors.primarySubtle, ...shadows.subtle },
   outerActive: { backgroundColor: colors.primary, ...shadows.button },
@@ -479,6 +678,44 @@ const styles = StyleSheet.create({
   innerActive: { backgroundColor: colors.primaryPressed },
   controlLabel: { marginTop: spacing.md, fontSize: 15, fontWeight: '800', color: colors.textMuted, letterSpacing: 1.5 },
   controlLabelActive: { color: colors.primary },
+
+  // START button aesthetic green shades
+  startOuterDefault: {
+    backgroundColor: '#DCFCE7', // Soft mint halo
+    borderWidth: 1.5,
+    borderColor: '#86EFAC',
+    shadowColor: '#16A34A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  startOuterActive: {
+    backgroundColor: '#22C55E', // Vibrant emerald outer ring
+    borderWidth: 1.5,
+    borderColor: '#4ADE80',
+    shadowColor: '#16A34A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
+    elevation: 9,
+  },
+  startInnerDefault: {
+    backgroundColor: '#F0FDF4', // Crisp light mint surface
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  startInnerActive: {
+    backgroundColor: '#15803D', // Deep rich forest green core
+    borderWidth: 1,
+    borderColor: '#166534',
+  },
+  startLabelDefault: {
+    color: '#16A34A',
+  },
+  startLabelActive: {
+    color: '#15803D',
+  },
 
   // Spinner Dialog Styles
   loaderOverlay: {

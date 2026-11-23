@@ -1,11 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   Image,
   StyleSheet,
-  Animated,
-  Easing,
   Modal,
   Pressable,
 } from 'react-native';
@@ -21,6 +19,8 @@ import {
 } from './ui';
 import { colors, spacing, radii, typography, shadows, layout } from './theme';
 import DeviceOfflineGuard from '../components/DeviceOfflineGuard';
+
+const BRAND_GREEN = '#7DC24d';
 
 /* -------------------------------------------------------------------------- */
 /*  HeaderMenu — static overflow (kebab) menu. No API / no dynamic data.       */
@@ -88,39 +88,19 @@ const HeaderMenu = () => {
 };
 
 /* -------------------------------------------------------------------------- */
-/*  ClothHero — illustration on a raised card over a soft pulsing glow         */
+/*  ClothHero — standalone illustration with no backdrop box or glow           */
 /* -------------------------------------------------------------------------- */
-const ClothHero = () => {
-  const pulse = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 1800, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
-  const glowScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.06] });
-  const glowOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.5] });
-
-  return (
-    <View style={styles.hero}>
-      <Animated.View style={[styles.glow, { transform: [{ scale: glowScale }], opacity: glowOpacity }]} />
-      <View style={styles.graphicCard}>
-        <Image
-          source={require('../assets/images/collection_cloth.png')}
-          style={styles.illustration}
-          resizeMode="contain"
-        />
-      </View>
-    </View>
-  );
-};
+const ClothHero = () => (
+  <View style={styles.hero}>
+    <Image
+      source={require('../assets/images/collection_cloth.png')}
+      style={styles.illustration}
+      resizeMode="contain"
+    />
+  </View>
+);
 
 const CollectionClothScreen = ({ navigation, route }) => {
-
   // 2. Extract the serialNumber (or entire device object) from route params
   const serialNumber = route?.params?.serialNumber || route?.params?.device?.serial_number;
   const device = route?.params?.device;
@@ -136,7 +116,7 @@ const CollectionClothScreen = ({ navigation, route }) => {
     <Screen background={colors.background}>
       {/* Header matches the flow screens: back + greeting/title + static menu. */}
 
-       <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
+      <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
 
       <MainHeader
         greeting="Setup"
@@ -149,12 +129,17 @@ const CollectionClothScreen = ({ navigation, route }) => {
       <View style={styles.content}>
         <ClothHero />
 
-        <Text style={styles.title}>Please ensure the collection cloth is connected</Text>
+        <Text style={styles.title}>Please Ensure the Collection Cloth is Connected</Text>
         <Text style={styles.message}>Make sure it's securely attached before you continue.</Text>
       </View>
 
       <BottomActionBar>
-        <PrimaryButton title="NEXT" icon="arrow-right" onPress={handleNext} />
+        <PrimaryButton
+          title="NEXT"
+          icon="arrow-right"
+          onPress={handleNext}
+          buttonStyle={styles.nextButton}
+        />
       </BottomActionBar>
     </Screen>
   );
@@ -204,29 +189,10 @@ const styles = StyleSheet.create({
 
   // Hero
   hero: {
-    width: 240,
-    height: 240,
+    width: 200,
+    height: 200,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  glow: {
-    position: 'absolute',
-    width: 210,
-    height: 210,
-    borderRadius: 105,
-    backgroundColor: colors.primaryTint,
-  },
-  graphicCard: {
-    width: 176,
-    height: 176,
-    borderRadius: radii.xxl,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
-    ...shadows.card,
   },
   illustration: {
     width: '100%',
@@ -250,5 +216,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     lineHeight: 22,
     maxWidth: 320,
+  },
+  nextButton: {
+    backgroundColor: BRAND_GREEN,
+    borderColor: BRAND_GREEN,
   },
 });

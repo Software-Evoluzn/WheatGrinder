@@ -20,10 +20,10 @@ import {
   AppDialog,
 } from './ui';
 import { colors, spacing, radii, typography, shadows, layout } from './theme';
-import { sendDeviceCommand, fetchRegisteredSerialNumber } from '../services/deviceApi';
+import { fetchRegisteredSerialNumber } from '../services/deviceApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import DeviceOfflineGuard from '../components/DeviceOfflineGuard';   // ← naya
+import DeviceOfflineGuard from '../components/DeviceOfflineGuard';
 
 /* -------------------------------------------------------------------------- */
 /*  HeaderMenu — static overflow (kebab) menu. No API / no dynamic data.       */
@@ -92,41 +92,30 @@ const HeaderMenu = () => {
 };
 
 /* -------------------------------------------------------------------------- */
-/*  ReadyHero — layered visualization, matching CleaningHero's composition    */
+/*  ReadyHero — standalone cleaning illustration with subtle pulse             */
 /* -------------------------------------------------------------------------- */
-const HERO = 260;
-const center = (size) => (HERO - size) / 2;
-
 const ReadyHero = () => {
-  const pulse = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     const pulseLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(scaleAnim, { toValue: 1.04, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(scaleAnim, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
       ])
     );
     pulseLoop.start();
     return () => pulseLoop.stop();
-  }, [pulse]);
-
-  const glowScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.08] });
-  const glowOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.55] });
+  }, [scaleAnim]);
 
   return (
-    <View style={styles.hero}>
-      <Animated.View style={[styles.glow, { transform: [{ scale: glowScale }], opacity: glowOpacity }]} />
-      <View style={styles.ringStatic} />
-      <View style={styles.ringArc} />
-      <View style={styles.disc}>
-        <Image
-          source={require('../assets/images/cleaning_gear.png')}
-          style={styles.discImage}
-          resizeMode="contain"
-        />
-      </View>
-    </View>
+    <Animated.View style={[styles.hero, { transform: [{ scale: scaleAnim }] }]}>
+      <Image
+        source={require('../assets/images/cleaning_gear.png')}
+        style={styles.heroImage}
+        resizeMode="contain"
+      />
+    </Animated.View>
   );
 };
 
@@ -138,8 +127,7 @@ const ReadyToInitiateSelfCleaning = ({ navigation, route }) => {
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-
-  const serialNumber = route?.params?.serialNumber 
+  const serialNumber = route?.params?.serialNumber;
   const device = route?.params?.device;
 
   const handleReady = async () => {
@@ -147,7 +135,6 @@ const ReadyToInitiateSelfCleaning = ({ navigation, route }) => {
     setSending(true);
 
     try {
-      // `let serialNumber` ka naam `sn` kar diya (clash se bachne ke liye)
       let sn =
         serialNumber || (await AsyncStorage.getItem('serial_number'));
 
@@ -172,9 +159,10 @@ const ReadyToInitiateSelfCleaning = ({ navigation, route }) => {
       setSending(false);
     }
   };
+
   return (
     <Screen background={colors.background}>
-       <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
+      <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
       {/* Header: back + greeting/title (Home style) + static overflow menu. */}
       <MainHeader
         greeting="Machine Status"
@@ -187,8 +175,8 @@ const ReadyToInitiateSelfCleaning = ({ navigation, route }) => {
       <View style={styles.content}>
         <ReadyHero />
 
-        <Text style={styles.title}>Ready to start self-cleaning</Text>
-        <Text style={styles.message}>Press READY to initiate the self-cleaning process.</Text>
+        <Text style={styles.title}>Ready to start Self-Cleaning</Text>
+        <Text style={styles.message}>Press READY to initiate the Self-Cleaning Process.</Text>
 
         <View style={styles.statusPill}>
           <View style={styles.dot} />
@@ -263,54 +251,14 @@ const styles = StyleSheet.create({
 
   // Hero visualization
   hero: {
-    width: HERO,
-    height: HERO,
+    width: 168,
+    height: 168,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  glow: {
-    position: 'absolute',
-    width: 210,
-    height: 210,
-    top: center(210),
-    left: center(210),
-    borderRadius: 105,
-    backgroundColor: colors.primaryTint,
-  },
-  ringStatic: {
-    position: 'absolute',
-    width: 198,
-    height: 198,
-    top: center(198),
-    left: center(198),
-    borderRadius: 99,
-    borderWidth: 1,
-    borderColor: colors.primarySubtle,
-  },
-  ringArc: {
-    position: 'absolute',
-    width: 198,
-    height: 198,
-    top: center(198),
-    left: center(198),
-    borderRadius: 99,
-    borderWidth: 6,
-    borderColor: colors.primaryTintBorder,
-  },
-  disc: {
-    width: 132,
-    height: 132,
-    borderRadius: 66,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.card,
-  },
-  discImage: {
-    width: '65%',
-    height: '65%',
+  heroImage: {
+    width: '100%',
+    height: '100%',
   },
 
   title: {

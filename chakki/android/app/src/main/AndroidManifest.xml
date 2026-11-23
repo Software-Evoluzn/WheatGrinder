@@ -3,6 +3,18 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
+      <!-- WiFi / Network -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+
+    <!-- Location (needed for WiFi scanning on Android < 13) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
+    <!-- Android 13+ WiFi scanning -->
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
+
     <application
       android:name=".MainApplication"
       android:label="@string/app_name"

@@ -148,7 +148,8 @@ const DoneHero = ({ checkScale }) => (
 /*  Main Screen Component                                                     */
 /* -------------------------------------------------------------------------- */
 const CleaningProcessScreen = ({ navigation, route }) => {
-  const { serialNumber, device } = route.params || {};
+  const { serialNumber, device, freshStart } = route.params || {};
+  const startSentRef = useRef(false);
 
   const [phase, setPhase] = useState('progress'); // 'progress' | 'done'
   const [progress, setProgress] = useState(0);
@@ -242,9 +243,13 @@ const CleaningProcessScreen = ({ navigation, route }) => {
       console.log('⚡ Socket connected:', socket.id);
 
       if (serialNumber) {
-        socket.emit('check_cleaning', {
-          serial_number: serialNumber,
-        });
+        // Nayi cleaning: pehle purana done/progress backend se hatao
+        if (freshStart && !startSentRef.current) {
+          startSentRef.current = true;
+          socket.emit('start_cleaning', { serial_number: serialNumber });
+        }
+
+        socket.emit('check_cleaning', { serial_number: serialNumber });
       }
     });
 
@@ -292,11 +297,11 @@ const CleaningProcessScreen = ({ navigation, route }) => {
     return (
       <Screen background={colors.background} edges={['top', 'left', 'right', 'bottom']}>
         <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
-        <MainHeader greeting="Machine Status" title="Cleaning Process" onBack={undefined} right={<HeaderMenu />} />
+        <MainHeader greeting="Machine Status" title="CLEANING PROCESS" onBack={undefined} right={<HeaderMenu />} />
 
         <View style={styles.centerContent}>
           <DoneHero checkScale={checkScale} />
-          <Text style={styles.title}>Self cleaning is done</Text>
+          <Text style={styles.title}>Self Cleaning is done</Text>
           <Text style={styles.message}>Please discard the contents from the collection bowl.</Text>
         </View>
 
@@ -322,8 +327,8 @@ const CleaningProcessScreen = ({ navigation, route }) => {
       <View style={styles.content}>
         <ProcessHero />
 
-        <Eyebrow style={{ marginTop: spacing.xxxl }}>Self-cleaning</Eyebrow>
-        <Text style={styles.title}>Cleaning process</Text>
+        <Eyebrow style={{ marginTop: spacing.xxxl }}>Self-Cleaning</Eyebrow>
+        <Text style={styles.title}>Cleaning Process</Text>
         <Text style={styles.percent}>{progress}% completed</Text>
 
         <ProgressBar
@@ -341,7 +346,7 @@ const CleaningProcessScreen = ({ navigation, route }) => {
         onClose={() => setBackWarningOpen(false)}
         icon="alert-triangle"
         title="Cleaning in Progress"
-        message="Self-cleaning is currently running. Please wait until the process finishes."
+        message="Self-Cleaning is currently running. Please wait until the process finishes."
         confirmLabel="OK"
         onConfirm={() => setBackWarningOpen(false)}
       />

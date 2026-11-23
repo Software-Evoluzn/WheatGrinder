@@ -1,9 +1,29 @@
+// =============================================================================
+//  ResetPasswordScreen
+// -----------------------------------------------------------------------------
+//  MERGED (Developer 1 + Developer 2):
+//    Same situation as VerifyOtpScreen — the two versions differ in exactly two
+//    spots, everything else is byte-identical:
+//      1. SafeAreaView import — Developer 1: 'react-native-safe-area-context'
+//         (kept, matches the rest of the merged app). Developer 2: core RN.
+//      2. Footer — Developer 1: shared <AppFooter variant="onDark" inline />
+//         (kept). Developer 2: plain <Text>Powered by EVOLUZN</Text>.
+//
+//    All logic/API/validation preserved exactly:
+//      • new + confirm password with Feather eye-toggle visibility
+//      • validations: both required, min 6 chars, must match, email+otp present
+//      • POST ${API_BASE_URL}/reset-password { email, otp, new_password }
+//      • success -> navigate('Login');  "Login" link -> navigate('LoginScreen')
+//      • loading state, Alert error handling, keyboard dismiss
+//    Developer 2's footerBrandText style is retained below (unused with
+//    AppFooter) so reverting to the plain-text footer is a one-line change.
+//    The capture.png logo require() path is unchanged.
+// =============================================================================
 import React, { useState } from 'react';
 import {
   StyleSheet,
   Text,
   View,
-  SafeAreaView,
   StatusBar,
   TextInput,
   TouchableOpacity,
@@ -12,10 +32,11 @@ import {
   TouchableWithoutFeedback,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
 
 import IP_CONFIG from '../services/ip.json';
-import { PrimaryButton } from './ui';
+import { PrimaryButton, AppFooter } from './ui';
 import { colors, spacing, radii, typography, shadows } from './theme';
 
 // ⚠️ Update with your local IP or backend URL
@@ -130,7 +151,9 @@ const ResetPasswordScreen = ({ route, navigation }) => {
               </Text>
             </TouchableOpacity>
 
-            <Text style={styles.footerBrandText}>Powered by EVOLUZN</Text>
+            {/* [MERGE] Developer 1 shared footer. Developer 2 used:
+                <Text style={styles.footerBrandText}>Powered by EVOLUZN</Text> */}
+            <AppFooter variant="onDark" inline />
           </View>
 
           {/* FLOATING RESET PASSWORD CARD */}
@@ -244,6 +267,7 @@ const styles = StyleSheet.create({
     color: colors.textOnPrimary,
     fontWeight: '700',
   },
+  // [Developer 2] retained so the plain-text footer can be restored easily.
   footerBrandText: {
     color: 'rgba(255,255,255,0.7)',
     fontSize: 12,

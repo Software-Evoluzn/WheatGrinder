@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef } from 'react';
 import {
   View,
@@ -7,15 +8,20 @@ import {
   StatusBar,
   TouchableWithoutFeedback,
   Animated,
-  Dimensions,
-  SafeAreaView,
+  useWindowDimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { AppFooter, BrandLogo } from './ui';
+import { colors, spacing } from './theme';
+
+const RASOI_LOGO = require('../assets/images/capture.png');
+
 const AUTO_ADVANCE_MS = 3000;
-const { height } = Dimensions.get('window');
 
 const WelcomeScreen = ({ navigation }) => {
+  const { height } = useWindowDimensions();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateYAnim = useRef(new Animated.Value(15)).current;
 
@@ -24,16 +30,8 @@ const WelcomeScreen = ({ navigation }) => {
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 700,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateYAnim, {
-        toValue: 0,
-        duration: 700,
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
+      Animated.timing(translateYAnim, { toValue: 0, duration: 700, useNativeDriver: true }),
     ]).start();
 
     const timer = setTimeout(() => {
@@ -41,6 +39,7 @@ const WelcomeScreen = ({ navigation }) => {
     }, AUTO_ADVANCE_MS);
 
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const goNext = async () => {
@@ -75,17 +74,15 @@ const WelcomeScreen = ({ navigation }) => {
         <StatusBar barStyle="dark-content" backgroundColor="#FAFAFA" />
 
         {/* Top Half: Premium Light Section */}
-        <View style={styles.topSection}>
-          <SafeAreaView style={styles.safeAreaTop}>
+        <View style={[styles.topSection, { height: height * 0.52 }]}>
+          <SafeAreaView style={styles.safeAreaTop} edges={['top', 'left', 'right']}>
             <Animated.View
               style={[
                 styles.brandContainer,
-                {
-                  opacity: fadeAnim,
-                  transform: [{ translateY: translateYAnim }],
-                },
+                { opacity: fadeAnim, transform: [{ translateY: translateYAnim }] },
               ]}
             >
+              {/* Softel logo — require() path + raw <Image> preserved from both devs */}
               <Image
                 source={require('../assets/images/Softel Millet mill logo 2.png')}
                 style={styles.millLogo}
@@ -102,37 +99,24 @@ const WelcomeScreen = ({ navigation }) => {
           <Animated.View
             style={[
               styles.floatingCardContainer,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: translateYAnim }],
-              },
+              { opacity: fadeAnim, transform: [{ translateY: translateYAnim }] },
             ]}
           >
             <View style={styles.rasoiCard}>
-              <Image
-                source={require('../assets/images/capture.png')}
-                style={styles.rasoiLogo}
-                resizeMode="contain"
-              />
+              <BrandLogo source={RASOI_LOGO} ratio={320 / 86} variant="card" />
             </View>
           </Animated.View>
 
           {/* Bottom Content Area */}
-          <SafeAreaView style={styles.safeAreaBottom}>
-            <Animated.View
-              style={[styles.bottomContent, { opacity: fadeAnim }]}
-            >
-              <View style={styles.welcomeWrapper}>
-                <Text style={styles.welcomeText}>Welcome Annapurna !</Text>
-                <View style={styles.accentDivider} />
-              </View>
+          <Animated.View style={[styles.bottomContent, { opacity: fadeAnim }]}>
+            <View style={styles.welcomeWrapper}>
+              <Text style={styles.welcomeText}>Welcome Annapurna !</Text>
+              <View style={styles.accentDivider} />
+            </View>
 
-              <View style={styles.footerContainer}>
-                <Text style={styles.poweredLabel}>POWERED BY</Text>
-                <Text style={styles.companyText}>EVOLUZN</Text>
-              </View>
-            </Animated.View>
-          </SafeAreaView>
+            {/* Branded footer — safe-area aware, sits above the Android nav bar */}
+            <AppFooter variant="onDark" row />
+          </Animated.View>
         </View>
       </View>
     </TouchableWithoutFeedback>
@@ -142,32 +126,14 @@ const WelcomeScreen = ({ navigation }) => {
 export default WelcomeScreen;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FAFAFA',
-  },
+  container: { flex: 1, backgroundColor: '#FAFAFA' },
 
   /* TOP SECTION */
-  topSection: {
-    height: height * 0.52,
-    backgroundColor: '#FAFAFA',
-    alignItems: 'center',
-  },
-  safeAreaTop: {
-    flex: 1,
-    width: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  brandContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  millLogo: {
-    width: 270,
-    height: 160,
-  },
+  topSection: { backgroundColor: '#FAFAFA', alignItems: 'center' },
+  safeAreaTop: { flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center' },
+  brandContainer: { width: '100%', alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xxl },
+  // [Developer 1] responsive sizing. [Developer 2] original was { width: 270, height: 160 }.
+  millLogo: { width: '80%', maxWidth: 290, height: 160 },
   byText: {
     fontSize: 20,
     fontStyle: 'italic',
@@ -178,11 +144,7 @@ const styles = StyleSheet.create({
   },
 
   /* BOTTOM SECTION */
-  bottomSection: {
-    flex: 1,
-    backgroundColor: '#55327A', // Deep Indigo / Dark Purple
-    alignItems: 'center',
-  },
+  bottomSection: { flex: 1, backgroundColor: colors.primary, alignItems: 'center' },
 
   /* FLOATING LOGO CARD */
   floatingCardContainer: {
@@ -193,45 +155,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   rasoiCard: {
-    width: '82%',
-    maxWidth: 340,
-    height: 92,
+    width: '86%',
+    maxWidth: 380,
+    height: 124,
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-
-    // Android Shadow
+    paddingHorizontal: 18,
+    paddingVertical: 14,
     elevation: 10,
-
-    // iOS Shadow
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
     shadowRadius: 16,
   },
-  rasoiLogo: {
-    width: '100%',
-    height: '100%',
-  },
+  // Fill ~85% of the card so the brand logo reads large and legible.
+  // (Unused while BrandLogo handles sizing; kept for the raw-<Image> fallback.)
+  rasoiLogo: { width: '60%', height: '74%' },
 
   /* BOTTOM CONTENT & FOOTER */
-  safeAreaBottom: {
-    flex: 1,
-    width: '100%',
-  },
   bottomContent: {
     flex: 1,
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: 78,
-    paddingBottom: 28,
   },
-  welcomeWrapper: {
-    alignItems: 'center',
-  },
+  welcomeWrapper: { alignItems: 'center' },
   welcomeText: {
     fontSize: 25,
     fontWeight: '700',
@@ -246,22 +197,5 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginTop: 12,
     opacity: 0.8,
-  },
-
-  footerContainer: {
-    alignItems: 'center',
-  },
-  poweredLabel: {
-    color: '#A295C4',
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 2,
-  },
-  companyText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 1.5,
-    marginTop: 3,
   },
 });

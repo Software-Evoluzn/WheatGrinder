@@ -153,6 +153,7 @@ def on_message(client, userdata, msg):
         # Real-time cleaning percentage emit (10%, 20%, 30%... 100%)
         if cleaning_percent is not None:
             print(f"🧹 Emitting cleaning progress {cleaning_percent}% for {device_id}")
+            cleaning_done_devices.pop(sn_lower, None)  
             cleaning_progress_devices[sn_lower] = {
                 "progress": cleaning_percent,
                 "timestamp": time.time(),

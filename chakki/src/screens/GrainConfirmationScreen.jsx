@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Screen, MainHeader, FootNote, AppDialog } from './ui';
+import { Screen, MainHeader, AppDialog } from './ui';
 import { colors, spacing, radii, shadows } from './theme';
 import { sendDeviceCommand, fetchRegisteredSerialNumber } from '../services/deviceApi';
 import { getGrainConfig } from '../services/grainLevels';
@@ -29,6 +29,7 @@ const resolveSerialNumber = async (route) => {
   return res.serial_number;
 };
 
+// Same FINE / MEDIUM / COARSE rule used in SetGrindTexture
 const getTextureLabel = (level, cfg) => {
   const min = cfg?.min ?? 0;
   const max = cfg?.max ?? 10;
@@ -53,15 +54,15 @@ const ActionCard = ({ label, icon, selected, onPress, disabled, subtitle }) => (
     <View style={[styles.actionIconWrap, selected && styles.actionIconWrapSelected]}>
       <Feather
         name={icon}
-        size={20}
+        size={24}
         color={selected ? colors.surface : colors.primary}
       />
     </View>
-    <Text numberOfLines={1} style={[styles.actionLabel, selected && styles.actionLabelSelected]}>
+    <Text style={[styles.actionLabel, selected && styles.actionLabelSelected]}>
       {label}
     </Text>
     {subtitle ? (
-      <Text numberOfLines={1} style={[styles.actionSubtitle, selected && styles.actionSubtitleSelected]}>
+      <Text style={[styles.actionSubtitle, selected && styles.actionSubtitleSelected]}>
         {subtitle}
       </Text>
     ) : null}
@@ -79,13 +80,11 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
   const textureLevel = Number(route?.params?.texture ?? grainConfig?.default ?? 5);
   const textureLabel = getTextureLabel(textureLevel, grainConfig);
 
-  // Flow rate percentage (from grainLevels.js defaultFlowRate)
-  const flowRate = Number(route?.params?.flowRate ?? grainConfig?.defaultFlowRate ?? 50);
-
   const [selectedOption, setSelectedOption] = useState(null);
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Clear the highlighted card when the user comes back to this screen
   useEffect(() => {
     const unsubscribe = navigation?.addListener?.('focus', () => setSelectedOption(null));
     return unsubscribe;
@@ -110,13 +109,12 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
       }
 
       navigation.navigate('MillingControlScreen', {
-        grain: grainId,
-        grainName,
-        texture: textureLabel,
-        textureValue: textureLevel,
-        flowRate,
+        grain: grainId,              // id, used by SetGrindTexture / getGrainConfig
+        grainName,                   // display name
+        texture: textureLabel,       // label string: 'FINE' | 'MEDIUM' | 'COARSE'
+        textureValue: textureLevel,  // numeric level
         serialNumber: serial,
-        processState: 'START',
+        processState: 'START',       // machine is already running
       });
     } catch (e) {
       setSelectedOption(null);
@@ -134,21 +132,20 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
       grainId,
       grainName,
       textureValue: textureLevel,
-      flowRate,
       serialNumber,
+      fromMilling:false,
     });
   };
 
   const handleSetFlowRate = () => {
     if (sending) return;
+
     setSelectedOption('flowRate');
+
     navigation.navigate('SetFlowRate', {
       grain: grainId,
       grainId,
       grainName,
-      texture: textureLabel,
-      textureValue: textureLevel,
-      flowRate,
       serialNumber,
     });
   };
@@ -167,24 +164,23 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
         <View style={styles.badgeContainer}>
           <View style={styles.badgeOuter}>
             <View style={styles.badgeInner}>
-              <Feather name="check" size={35} color={colors.primary} style={styles.checkIcon} />
+              <Feather name="check" size={38} color={colors.primary} style={styles.checkIcon} />
             </View>
           </View>
         </View>
 
-        <View style={styles.texturePill}>
+       <View style={styles.texturePill}>
           <View style={[styles.dot, sending && styles.dotActive]} />
           <Text style={styles.textureText}>
             {sending
               ? 'COMMUNICATING...'
-              : `${textureLabel} (Lvl ${textureLevel})  •  Flow ${flowRate}%`}
+              : `${route?.params?.isTextureCustomized ? 'Selected Texture' : 'Default Texture'}  •  ${textureLabel} (Level ${textureLevel})`}
           </Text>
         </View>
-
         <View style={styles.promptContainer}>
           <Text style={styles.question}>Ready to Grind?</Text>
           <Text style={styles.subQuestion}>
-            Start with default settings or adjust texture & flow rate.
+            Start immediately with default settings or adjust grind texture.
           </Text>
         </View>
 
@@ -194,7 +190,7 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
             onPress={handleStartProcess}
             icon="play"
             label={sending ? 'SENDING...' : 'START'}
-            subtitle="Begin now"
+            subtitle="Begin grinding now"
             disabled={sending}
           />
           <ActionCard
@@ -202,7 +198,7 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
             onPress={handleSetTexture}
             icon="sliders"
             label="TEXTURE"
-            subtitle={`Level ${textureLevel}`}
+            subtitle="Adjust coarseness"
             disabled={sending}
           />
           <ActionCard
@@ -210,14 +206,12 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
             onPress={handleSetFlowRate}
             icon="activity"
             label="FLOW RATE"
-            subtitle={`${flowRate}%`}
+            subtitle="Adjust grain flow"
             disabled={sending}
           />
         </View>
-      </View>
 
-      <View style={styles.footer}>
-        <FootNote>Use back arrow to change selected grain</FootNote>
+        <Text style={styles.helperText}>Use back arrow to change selected grain</Text>
       </View>
 
       <AppDialog
@@ -235,7 +229,7 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
 
 export default GrainConfirmationScreen;
 
-const BADGE_SIZE = 112;
+const BADGE_SIZE = 122;
 
 const styles = StyleSheet.create({
   body: {
@@ -247,7 +241,8 @@ const styles = StyleSheet.create({
 
   /* Hero Badge */
   badgeContainer: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
+    transform: [{ translateY: -34 }],
   },
   badgeOuter: {
     width: BADGE_SIZE,
@@ -260,9 +255,9 @@ const styles = StyleSheet.create({
     borderColor: colors.primaryTintBorder || colors.border,
   },
   badgeInner: {
-    width: BADGE_SIZE - 28,
-    height: BADGE_SIZE - 28,
-    borderRadius: (BADGE_SIZE - 28) / 2,
+    width: BADGE_SIZE - 30,
+    height: BADGE_SIZE - 30,
+    borderRadius: (BADGE_SIZE - 30) / 2,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -281,8 +276,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.lg + 2,
+    paddingVertical: spacing.sm,
     borderRadius: radii.pill,
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -290,9 +285,9 @@ const styles = StyleSheet.create({
     ...shadows.subtle,
   },
   dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: colors.primary,
     marginRight: spacing.sm,
   },
@@ -300,7 +295,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.warning || '#E6A23C',
   },
   textureText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
     color: colors.textPrimary,
     letterSpacing: 0.6,
@@ -310,35 +305,40 @@ const styles = StyleSheet.create({
   /* Titles */
   promptContainer: {
     alignItems: 'center',
-    marginTop: spacing.xxl,
-    marginBottom: spacing.xl,
+    marginTop: spacing.xl,
+    marginBottom: spacing.lg,
   },
   question: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
     color: colors.textPrimary,
     textAlign: 'center',
     letterSpacing: -0.2,
   },
   subQuestion: {
-    fontSize: 13,
+    fontSize: 14,
     color: colors.textSecondary,
     textAlign: 'center',
     marginTop: spacing.xs,
-    paddingHorizontal: spacing.md,
+    lineHeight: 20,
+    paddingHorizontal: spacing.sm,
   },
 
-  /* Action Cards */
+  /* Three Action Cards */
   cardsRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.sm + 2,
     alignSelf: 'stretch',
     justifyContent: 'center',
+    alignItems: 'stretch',
   },
+
   actionCard: {
     flex: 1,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.xs,
+    minWidth: 0,
+    minHeight: 132,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.sm,
     backgroundColor: colors.surface,
     borderRadius: radii.xl,
     borderWidth: 1.5,
@@ -347,55 +347,71 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.subtle,
   },
+
   actionCardSelected: {
     borderColor: colors.primary,
     backgroundColor: colors.primaryTint,
   },
+
   actionCardPressed: {
     opacity: 0.85,
     transform: [{ scale: 0.98 }],
   },
+
   actionCardDisabled: {
     opacity: 0.6,
   },
+
+  /* Action Card Icons */
   actionIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: colors.primaryTint,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
     overflow: 'hidden',
   },
+
   actionIconWrapSelected: {
     backgroundColor: colors.primary,
   },
+
+  /* Action Card Labels */
   actionLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '800',
     color: colors.textPrimary,
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
     textAlign: 'center',
   },
+
   actionLabelSelected: {
     color: colors.primary,
   },
+
   actionSubtitle: {
     fontSize: 11,
     color: colors.textMuted,
-    marginTop: 2,
+    marginTop: 4,
     textAlign: 'center',
+    lineHeight: 15,
   },
+
   actionSubtitleSelected: {
     color: colors.primary,
     opacity: 0.8,
   },
 
-  /* Footer */
-  footer: {
-    alignItems: 'center',
-    paddingBottom: spacing.xl,
-    paddingHorizontal: spacing.xxl,
+  /* Helper Text below cards */
+  helperText: {
+    marginTop: spacing.xl,
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textMuted,
+    lineHeight: 22,
+    textAlign: 'center',
+    paddingHorizontal: spacing.md,
   },
 });

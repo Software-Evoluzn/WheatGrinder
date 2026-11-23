@@ -157,23 +157,34 @@ const SetGrindTexture = ({ navigation, route }) => {
         throw new Error(res?.error || 'Could not send grinding level to machine');
       }
 
-      const params = {
-        grain: grainId,
-        grainName: grainDisplayName,
-        texture: getTextureLabel(),
-        textureValue: textureLevel,
-        serialNumber,
-        processState: route?.params?.processState
-      };
-
-      // merge: true -> if MillingControlScreen is already in the stack (edit flow),
-      // go back to it and merge the new params instead of opening a second copy.
-      // React Navigation v7: use navigation.popTo('MillingControlScreen', params, { merge: true })
-      navigation.navigate({
-        name: 'MillingControlScreen',
-        params,
-        merge: true,
-      });
+      if (fromMilling) {
+        // Agar MillingControlScreen se aaye the, toh wahi wapas jao
+        navigation.navigate({
+          name: 'MillingControlScreen',
+          params: {
+            grain: grainId,
+            grainName: grainDisplayName,
+            texture: getTextureLabel(),
+            textureValue: textureLevel,
+            serialNumber,
+            processState: route?.params?.processState,
+          },
+          merge: true,
+        });
+      } else {
+        // Agar GrainConfirmationScreen se aaye the, toh wahi wapas jao updated texture ke saath
+        navigation.navigate({
+          name: 'GrainConfirmationScreen', // ⚠️ Apne navigator mein registered exact screen name check kar lein
+          params: {
+            grain: grainId,
+            grainName: grainDisplayName,
+            texture: textureLevel, // GrainConfirmationScreen numeric level expect karta hai
+            serialNumber,
+            isTextureCustomized: true,
+          },
+          merge: true,
+        });
+      }
     } catch (e) {
       setErrorMsg(e.message);
     } finally {

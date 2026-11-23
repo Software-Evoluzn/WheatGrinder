@@ -4,6 +4,13 @@
 //  Purple-first brand system. Every screen and shared component reads from here
 //  so colours, spacing, type, radii and shadows stay identical everywhere.
 //  Consumed directly (no React hook) so it drops into any screen safely.
+// -----------------------------------------------------------------------------
+//  MERGED (Developer 1 + Developer 2):
+//    • Tokens below (colors/spacing/radii/typography/motion/layout/zIndex/
+//      shadows/statusPalette) are IDENTICAL in both developers' versions.
+//    • Developer 1 added the RESPONSIVE SCALING helpers (guidelineBaseWidth,
+//      scaleSize, moderateScale, clamp) — kept here because ./ui imports them.
+//      Developer 2's theme is a subset of this, so nothing is lost.
 // =============================================================================
 
 export const colors = {
@@ -94,6 +101,35 @@ export const shadows = {
   floatingNav: { shadowColor: '#3E1A5B', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.14, shadowRadius: 24, elevation: 8 },
 };
 
+// =============================================================================
+//  RESPONSIVE SCALING  —  pure helpers (no hooks), safe to use in StyleSheet
+//  [Developer 1]
+// -----------------------------------------------------------------------------
+//  Screens that need window-aware sizing should prefer the `useResponsive` hook
+//  from ./ui (it re-renders on rotation / split-screen). These pure helpers are
+//  for one-off static scaling and are driven off a reference phone width so the
+//  design looks identical to how it was authored on a ~390pt-wide device.
+// =============================================================================
+export const guidelineBaseWidth = 390; // reference design width (pt)
+
+const clampNum = (v, min, max) => Math.min(Math.max(v, min), max);
+
+// Linear scale against the device width, gently clamped so small phones don't
+// get unreadably tiny text and large phones / tablets don't blow things up.
+export const scaleSize = (size, width = guidelineBaseWidth, { min = 0.85, max = 1.25 } = {}) => {
+  const factor = clampNum(width / guidelineBaseWidth, min, max);
+  return Math.round(size * factor);
+};
+
+// Moderate scale: only apply a fraction of the delta (default 0.5). Best for
+// font sizes, where full linear scaling feels too aggressive.
+export const moderateScale = (size, width = guidelineBaseWidth, factor = 0.5) => {
+  const full = scaleSize(size, width);
+  return Math.round(size + (full - size) * factor);
+};
+
+export const clamp = clampNum;
+
 // Variant -> colour pair, so status screens resolve a look in one place.
 export const statusPalette = {
   info: { color: colors.info, tint: colors.infoTint, border: colors.primaryTintBorder },
@@ -102,4 +138,7 @@ export const statusPalette = {
   danger: { color: colors.danger, tint: colors.dangerTint, border: '#F6C9C9' },
 };
 
-export default { colors, spacing, radii, typography, motion, layout, zIndex, shadows, statusPalette };
+export default {
+  colors, spacing, radii, typography, motion, layout, zIndex, shadows, statusPalette,
+  guidelineBaseWidth, scaleSize, moderateScale, clamp,
+};

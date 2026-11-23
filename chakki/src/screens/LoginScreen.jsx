@@ -1,8 +1,8 @@
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Image,
   Text,
   TextInput,
   TouchableOpacity,
@@ -11,7 +11,10 @@ import {
   Platform,
   ScrollView,
   Alert,
+  StatusBar,
+  useWindowDimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -22,10 +25,18 @@ import {
   loginWithBiometricApi,
   getBiometricCustomerId,
 } from '../services/AuthService';
+import { AppFooter, BrandLogo } from './ui';
 
 const rnBiometrics = new ReactNativeBiometrics();
 
 const LoginScreen = ({ navigation }) => {
+  const { height: screenH } = useWindowDimensions();
+  // Where the purple area starts (follows the card so the card straddles white/purple)
+  const [purpleTop, setPurpleTop] = useState(Math.round(screenH * 0.55));
+  const onCardLayout = (e) => {
+    const { y, height } = e.nativeEvent.layout;
+    setPurpleTop(Math.round(y + height * 0.8));
+  };
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -90,7 +101,7 @@ const LoginScreen = ({ navigation }) => {
           await AsyncStorage.removeItem('auto_login');
         }
 
-        navigation.replace('Main', {
+        navigation.replace('ConnectWifiScreen', {
           customer_id: data.customer_id,
         });
       }
@@ -144,143 +155,140 @@ const LoginScreen = ({ navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.mainCard}>
-          {/* Top White Section */}
-          <View style={styles.topSection}>
-            <Image
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          {/* Purple area behind the lower part of the card (full width, to the bottom) */}
+          <View style={[styles.purpleBg, { top: purpleTop }]} />
+
+          {/* Logo: same component and size as Home */}
+          <View style={styles.logoWrap}>
+            <BrandLogo
               source={require('../assets/images/capture.png')}
-              style={styles.logo}
-              resizeMode="contain"
+              ratio={320 / 86}
+              variant="header"
             />
           </View>
 
-          {/* Purple Bottom Section */}
-          <View style={styles.bottomSection}>
-            {/* Login Card */}
-            <View style={styles.loginCard}>
-              <Text style={styles.loginTitle}>Login</Text>
+          {/* Login card */}
+          <View style={styles.loginCard} onLayout={onCardLayout}>
+            <Text style={styles.loginTitle}>Login</Text>
 
-              {/* Email */}
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="Email"
+              placeholderTextColor="#555"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+
+            <View style={styles.passwordContainer}>
               <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="Email"
-                placeholderTextColor="#555"
-                keyboardType="email-address"
-                autoCapitalize="none"
+                style={styles.passwordInput}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Password"
+                placeholderTextColor="#777"
+                secureTextEntry={!showPassword}
               />
-
-              {/* Password */}
-              <View style={styles.passwordContainer}>
-                <TextInput
-                  style={styles.passwordInput}
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Password"
-                  placeholderTextColor="#777"
-                  secureTextEntry={!showPassword}
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                <Feather
+                  name={showPassword ? 'eye-off' : 'eye'}
+                  size={20}
+                  color="#222"
                 />
-
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                  <Feather
-                    name={showPassword ? 'eye-off' : 'eye'}
-                    size={20}
-                    color="#222"
-                  />
-                </TouchableOpacity>
-              </View>
-
-              {/* Auto Login checkbox + Forgot Password */}
-              <View style={styles.optionsRow}>
-                <TouchableOpacity
-                  style={styles.checkboxRow}
-                  onPress={() => setAutoLogin(!autoLogin)}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Feather
-                    name={autoLogin ? 'check-square' : 'square'}
-                    size={20}
-                    color="#55327A"
-                  />
-                  <Text style={styles.checkboxLabel}>Auto Login</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={() => navigation.navigate('ForgotPasswordScreen')}
-                >
-                  <Text style={styles.forgotText}>Forgot Password ?</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Option 1: Email & Password Login Button */}
-              <TouchableOpacity
-                style={styles.loginButton}
-                onPress={handleLogin}
-                disabled={loading}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.loginButtonText}>
-                  {loading ? 'Logging in...' : 'Login'}
-                </Text>
-              </TouchableOpacity>
-
-              {/* Option 2: Biometric Button (Agar biometric enabled hai) */}
-              {savedBioCustomerId && (
-                <>
-                  <View style={styles.dividerRow}>
-                    <View style={styles.dividerLine} />
-                    <Text style={styles.dividerText}>OR</Text>
-                    <View style={styles.dividerLine} />
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.biometricFullButton}
-                    onPress={handleBiometricLogin}
-                    disabled={loading}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialCommunityIcons
-                      name="fingerprint"
-                      size={24}
-                      color="#56327A"
-                    />
-                    <Text style={styles.biometricButtonText}>
-                      Login with Biometric
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
-
-            {/* Register */}
-            <View style={styles.registerContainer}>
-              <Text style={styles.registerText}>Not Registered?</Text>
-
-              <TouchableOpacity
-                style={styles.registerButton}
-                onPress={() => navigation.navigate('Register')}
-              >
-                <Text style={styles.registerButtonText}>Register</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Powered By */}
-            <Text style={styles.poweredText}>Powered by EVOLUZN</Text>
+            <View style={styles.optionsRow}>
+              <TouchableOpacity
+                style={styles.checkboxRow}
+                onPress={() => setAutoLogin(!autoLogin)}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Feather
+                  name={autoLogin ? 'check-square' : 'square'}
+                  size={20}
+                  color="#55327A"
+                />
+                <Text style={styles.checkboxLabel}>Auto Login</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => navigation.navigate('ForgotPasswordScreen')}
+              >
+                <Text style={styles.forgotText}>Forgot Password ?</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.loginButton}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.loginButtonText}>
+                {loading ? 'Logging in...' : 'Login'}
+              </Text>
+            </TouchableOpacity>
+
+            {savedBioCustomerId && (
+              <>
+                <View style={styles.dividerRow}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>OR</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+
+                <TouchableOpacity
+                  style={styles.biometricFullButton}
+                  onPress={handleBiometricLogin}
+                  disabled={loading}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons
+                    name="fingerprint"
+                    size={24}
+                    color="#56327A"
+                  />
+                  <Text style={styles.biometricButtonText}>
+                    Login with Biometric
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+          {/* Register (on purple) */}
+          <View style={styles.registerContainer}>
+            <Text style={styles.registerText}>Not Registered?</Text>
+            <TouchableOpacity
+              style={styles.registerButton}
+              onPress={() => navigation.navigate('Register')}
+            >
+              <Text style={styles.registerButtonText}>Register</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ flex: 1, minHeight: 24 }} />
+
+          {/* Footer from ui.js: safe-area aware, sits above the Android nav bar */}
+          <AppFooter variant="onDark" row />
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
@@ -289,60 +297,37 @@ export default LoginScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F3F3',
+    backgroundColor: '#FFFFFF',
   },
 
   scrollContainer: {
     flexGrow: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 24,
-  },
-
-  mainCard: {
-    width: '96%',
-    maxWidth: 700,
-    minHeight: 800,
-    borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.18,
-    shadowRadius: 25,
-    elevation: 10,
-  },
-
-  topSection: {
-    height: 500,
     backgroundColor: '#FFFFFF',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    paddingTop: 90,
   },
 
-  logo: {
-    width: 310,
-    height: 100,
-  },
-
-  bottomSection: {
-    flex: 1,
-    minHeight: 320,
+  purpleBg: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: '#55327A',
+  },
+
+  logoWrap: {
     alignItems: 'center',
-    position: 'relative',
-    paddingTop: 0,
+    paddingTop: 72,
+    paddingBottom: 52,
   },
 
   loginCard: {
-    width: '90%',
-    maxWidth: 320,
+    width: '88%',
+    maxWidth: 340,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 24,
-    marginTop: -265,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
@@ -410,9 +395,10 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
 
+  // [MERGE] Developer 2 green applied app-wide. Developer 1 original: '#56327A'.
   loginButton: {
     height: 50,
-    backgroundColor: '#56327A',
+    backgroundColor: '#7DC24D',
     borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
@@ -443,6 +429,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
+  // Secondary (biometric) button stays purple-outlined — identical in both devs.
   biometricFullButton: {
     height: 48,
     borderWidth: 1.5,
@@ -475,9 +462,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
+  // [MERGE] Developer 2 green fill applied. Developer 1 original: transparent + white border.
   registerButton: {
+    backgroundColor: '#7DC24D',
     borderWidth: 1,
-    borderColor: '#FFFFFF',
+    borderColor: '#7DC24D',
     borderRadius: 5,
     paddingHorizontal: 20,
     paddingVertical: 7,
@@ -485,13 +474,6 @@ const styles = StyleSheet.create({
 
   registerButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-
-  poweredText: {
-    marginTop: 24,
-    color: '#B5A5C7',
     fontSize: 14,
     fontWeight: '500',
   },

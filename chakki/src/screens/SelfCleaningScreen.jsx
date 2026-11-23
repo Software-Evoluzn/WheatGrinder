@@ -81,7 +81,7 @@ const HeaderMenu = () => {
         onClose={() => setHelpOpen(false)}
         icon="help-circle"
         title="Help"
-        message="Self-cleaning runs automatically. Keep the lid closed and wait for the cycle to finish, then tap NEXT to continue."
+        message="Self-Cleaning runs automatically. Keep the lid closed and wait for the cycle to finish, then tap NEXT to continue."
         confirmLabel="Got it"
         onConfirm={() => setHelpOpen(false)}
       />
@@ -197,6 +197,7 @@ const SelfCleaningScreen = ({ navigation, route }) => {
         navigation.navigate('CleaningProcessScreen', {
           serialNumber: serialNumber,
           device: device,
+          freshStart:true,
         });
       }
     }
@@ -221,7 +222,7 @@ const SelfCleaningScreen = ({ navigation, route }) => {
       <View style={styles.content}>
         <CleaningHero />
 
-        <Text style={styles.title}>Self-cleaning in progress</Text>
+        <Text style={styles.title}>Self-Cleaning in Progress</Text>
         <Text style={styles.message}>Please wait while the machine cleans itself.</Text>
 
         <View style={styles.statusPill}>
@@ -245,7 +246,7 @@ const SelfCleaningScreen = ({ navigation, route }) => {
         onClose={() => setBackWarningOpen(false)}
         icon="alert-triangle"
         title="Process in Progress"
-        message="Self-cleaning is currently running. You cannot go back until the process is complete."
+        message="Self-Cleaning is currently running. You cannot go back until the process is complete."
         confirmLabel="OK"
         onConfirm={() => setBackWarningOpen(false)}
       />

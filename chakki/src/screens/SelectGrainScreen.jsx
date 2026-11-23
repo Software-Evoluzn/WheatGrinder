@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, Pressable, Modal } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +17,9 @@ import { sendDeviceCommand, fetchRegisteredSerialNumber } from '../services/devi
 import DeviceOfflineGuard from '../components/DeviceOfflineGuard';
 
 import { getGrainConfig } from '../services/grainLevels';
+
+const BRAND_GREEN = '#7DC24d';
+const BACK_BUTTON_BG = '#3E1A5B';
 
 const HeaderMenu = () => {
   const [open, setOpen] = useState(false);
@@ -114,40 +117,14 @@ const SelectGrainScreen = ({ navigation, route }) => {
   const [errorMsg, setErrorMsg] = useState('');
 
   const serialNumber = route.params?.serialNumber;
-  const allowNavigationRef = useRef(false);
-
-  // Direct 'Main' screen par bhejne ka function
-  const goToMain = () => {
-    allowNavigationRef.current = true;
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'Main' }],
-    });
-  };
-
-  // Har tarah ke back press (hardware back / swipe back) ko intercept karke 'Main' par bhejna
-  useEffect(() => {
-    const unsubscribe = navigation?.addListener?.('beforeRemove', (e) => {
-      if (allowNavigationRef.current) {
-        return;
-      }
-
-      e.preventDefault();
-      goToMain();
-    });
-
-    return unsubscribe;
-  }, [navigation]);
 
   const handleCleanStone = async () => {
     if (sending) return;
 
     try {
       setSending(true);
-      allowNavigationRef.current = true;
-      navigation.navigate('CleaningProcessScreen', { serialNumber });
+      navigation.navigate('SelfCleaning', { serialNumber , device: route?.params?.device });
     } catch (e) {
-      allowNavigationRef.current = false;
       console.log('Clean stone error:', e);
       setErrorMsg(e?.message || 'Could not find registered machine');
     } finally {
@@ -166,9 +143,9 @@ const SelectGrainScreen = ({ navigation, route }) => {
 
     setSending(true);
     try {
-      const resolvedSerial = await resolveSerialNumber(route);
+      const serialNumber = await resolveSerialNumber(route);
 
-      const res = await sendDeviceCommand(resolvedSerial, grain.command);
+      const res = await sendDeviceCommand(serialNumber, grain.command);
       const isSuccess = res?.success || res?.status === 'success' || res?.status === 200;
       if (!isSuccess) {
         throw new Error(res?.error || res?.message || 'Could not send grain selection to machine');
@@ -176,16 +153,13 @@ const SelectGrainScreen = ({ navigation, route }) => {
 
       const grainConfig = getGrainConfig(grain.id);
 
-      allowNavigationRef.current = true;
       navigation.navigate('GrainConfirmationScreen', {
-        serialNumber: resolvedSerial,
+        serialNumber,
         grain: grain.id,
         grainCommand: grain.command,
         texture: grainConfig.default,
-        flowRate: grainConfig.defaultFlowRate,
       });
     } catch (e) {
-      allowNavigationRef.current = false;
       setErrorMsg(e.message || 'Network error, please try again.');
     } finally {
       setSending(false);
@@ -198,7 +172,8 @@ const SelectGrainScreen = ({ navigation, route }) => {
       <MainHeader
         greeting="Machine Setup"
         title="Select Grain"
-        onBack={goToMain}
+        onBack={navigation?.goBack ? () => navigation.goBack() : undefined}
+        backButtonStyle={styles.backButton}
         right={<HeaderMenu />}
       />
 
@@ -217,11 +192,15 @@ const SelectGrainScreen = ({ navigation, route }) => {
                 accessibilityState={{ selected: isSelected }}
                 style={[styles.card, isSelected && styles.cardSelected]}
               >
-                <View style={[styles.thumbWrap, isSelected && styles.thumbWrapSelected]}>
+                <View style={styles.thumbWrap}>
                   {item.isOthers ? (
                     <Feather name="more-horizontal" size={44} color={colors.primary} />
                   ) : (
-                    <Image source={item.image} style={styles.thumb} resizeMode="contain" />
+                    <Image
+                      source={item.image}
+                      style={[styles.thumb, item.id === 'wheat' && styles.wheatThumb]}
+                      resizeMode="contain"
+                    />
                   )}
                 </View>
                 <Text numberOfLines={1} style={[styles.label, isSelected && styles.labelSelected]}>
@@ -252,6 +231,7 @@ const SelectGrainScreen = ({ navigation, route }) => {
             icon="arrow-right"
             fullWidth={false}
             style={{ flex: 1 }}
+            buttonStyle={styles.greenButton}
             onPress={handleNext}
             disabled={sending}
           />
@@ -323,15 +303,12 @@ const styles = StyleSheet.create({
   thumbWrap: {
     width: 128,
     height: 128,
-    borderRadius: 64,
-    backgroundColor: colors.primaryTint,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
-    overflow: 'hidden',
   },
-  thumbWrapSelected: { backgroundColor: colors.surface },
   thumb: { width: 118, height: 118 },
+  wheatThumb: { width: 158, height: 158 },
   label: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, letterSpacing: 0.4, textAlign: 'center' },
   labelSelected: { color: colors.primary },
   checkDot: {
@@ -347,4 +324,11 @@ const styles = StyleSheet.create({
   },
   actions: { flexDirection: 'row', gap: spacing.md },
   footer: { ...typography.caption, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xxl },
+  backButton: {
+    backgroundColor: BACK_BUTTON_BG,
+    borderColor: BACK_BUTTON_BG,
+  },
+  greenButton: {
+    backgroundColor: BRAND_GREEN,
+  },
 });

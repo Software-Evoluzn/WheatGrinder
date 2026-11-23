@@ -4,6 +4,14 @@
 //  These are presentational only. They never own navigation or business logic;
 //  screens pass in handlers/state. Import what you need:
 //     import { Screen, AppHeader, PrimaryButton, StatusView } from './ui';
+// -----------------------------------------------------------------------------
+//  MERGED (Developer 1 + Developer 2):
+//    • Developer 1 — responsive layer (useResponsive) + new shared components
+//      (ResponsiveText, ResponsiveContainer, AppFooter/PoweredByEvoluzn,
+//       BrandLogo, ScreenWrapper, CommonHeader).
+//    • Developer 2 — per-component style-override props (color/style/buttonStyle,
+//       iconColor, backButtonStyle, fillColor) + GREEN primary/solid-pill color.
+//    Both sets of changes are preserved. See notes marked [MERGE].
 // =============================================================================
 import React, { useEffect, useRef } from 'react';
 import {
@@ -17,6 +25,10 @@ import {
   Platform,
   ActivityIndicator,
   Modal,
+  ScrollView,
+  KeyboardAvoidingView,
+  useWindowDimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
@@ -29,7 +41,37 @@ import {
   motion,
   layout,
   statusPalette,
+  moderateScale,
+  scaleSize,
+  guidelineBaseWidth,
 } from './theme';
+
+/* -------------------------------------------------------------------------- */
+/*  useResponsive — single hook every screen can use for window-aware sizing    */
+/*    Re-renders on rotation / split-screen because it reads useWindowDimensions*/
+/*    [Developer 1]                                                             */
+/* -------------------------------------------------------------------------- */
+export const BREAKPOINTS = { small: 360, large: 600 };
+
+export const useResponsive = () => {
+  const { width, height } = useWindowDimensions();
+  const isSmall = width < BREAKPOINTS.small;   // compact phones (e.g. 320–359pt)
+  const isLarge = width >= BREAKPOINTS.large;  // large phones / tablets
+  return {
+    width,
+    height,
+    isSmall,
+    isLarge,
+    isPortrait: height >= width,
+    // % of width / height — handy for fluid sizing without magic pixels
+    wp: (pct) => Math.round((width * pct) / 100),
+    hp: (pct) => Math.round((height * pct) / 100),
+    // scale a design value against the real device width
+    scale: (size) => scaleSize(size, width),
+    // moderate scale — best for font sizes
+    ms: (size, factor = 0.5) => moderateScale(size, width, factor),
+  };
+};
 
 /* -------------------------------------------------------------------------- */
 /*  Screen — consistent safe-area + status-bar wrapper                          */
@@ -62,31 +104,56 @@ export const SectionHeader = ({ title, subtitle, style }) => (
 );
 
 /* -------------------------------------------------------------------------- */
-/*  AppHeader — back button + centered title/subtitle + optional right slot     */
+/*  IconButton — [MERGE] Developer 2's signature: adds color / style /         */
+/*  buttonStyle overrides on top of Developer 1's icon button.                 */
 /* -------------------------------------------------------------------------- */
-export const IconButton = ({ name, onPress, variant = 'ghost', size = 20, accessibilityLabel }) => {
+export const IconButton = ({
+  name,
+  onPress,
+  variant = 'ghost',
+  size = 20,
+  color,
+  accessibilityLabel,
+  style,
+  buttonStyle,
+}) => {
   const isSolid = variant === 'solid';
+  const iconColor = color || (isSolid ? colors.iconOnPrimary : colors.primary);
   return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={8}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel || name}
-      style={({ pressed }) => [
-        styles.iconBtn,
-        isSolid ? styles.iconBtnSolid : styles.iconBtnGhost,
-        pressed && { opacity: 0.75 },
-      ]}
-    >
-      <Feather name={name} size={size} color={isSolid ? colors.iconOnPrimary : colors.primary} />
-    </Pressable>
+    <View style={style}>
+      <Pressable
+        onPress={onPress}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel || name}
+        style={({ pressed }) => [
+          styles.iconBtn,
+          isSolid ? styles.iconBtnSolid : styles.iconBtnGhost,
+          buttonStyle,
+          pressed && { opacity: 0.75 },
+        ]}
+      >
+        <Feather name={name} size={size} color={iconColor} />
+      </Pressable>
+    </View>
   );
 };
 
-export const AppHeader = ({ title, subtitle, onBack, right, align = 'center' }) => (
+/* -------------------------------------------------------------------------- */
+/*  AppHeader — back button + centered title/subtitle + optional right slot     */
+/*    [MERGE] keeps Developer 2's backButtonStyle prop.                         */
+/* -------------------------------------------------------------------------- */
+export const AppHeader = ({ title, subtitle, onBack, backButtonStyle, right, align = 'center' }) => (
   <View style={styles.header}>
     {onBack ? (
-      <IconButton name="arrow-left" onPress={onBack} variant="solid" size={20} accessibilityLabel="Go back" />
+      <IconButton
+        name="arrow-left"
+        onPress={onBack}
+        variant="solid"
+        size={20}
+        buttonStyle={backButtonStyle}
+        accessibilityLabel="Go back"
+      />
     ) : (
       <View style={styles.headerSpacer} />
     )}
@@ -131,18 +198,22 @@ const usePressScale = () => {
   return { scale, onPressIn: () => to(motion.press.scaleDown), onPressOut: () => to(1) };
 };
 
+/* [MERGE] Developer 2's PrimaryButton: adds iconColor + buttonStyle overrides. */
 export const PrimaryButton = ({
   title,
   onPress,
   icon,
+  iconColor,
   iconRight = true,
   loading = false,
   disabled = false,
   fullWidth = true,
   style,
+  buttonStyle,
 }) => {
   const { scale, onPressIn, onPressOut } = usePressScale();
   const isDisabled = disabled || loading;
+  const resolvedIconColor = iconColor || colors.textOnPrimary;
   return (
     <Animated.View style={[fullWidth && { alignSelf: 'stretch' }, { transform: [{ scale }] }, style]}>
       <Pressable
@@ -152,15 +223,34 @@ export const PrimaryButton = ({
         disabled={isDisabled}
         accessibilityRole="button"
         accessibilityState={{ disabled: isDisabled, busy: loading }}
-        style={[styles.btnBase, styles.btnPrimary, isDisabled && styles.btnPrimaryDisabled]}
+        style={[
+          styles.btnBase,
+          styles.btnPrimary,
+          buttonStyle,
+          isDisabled && styles.btnPrimaryDisabled,
+        ]}
       >
         {loading ? (
           <ActivityIndicator color={colors.textOnPrimary} />
         ) : (
           <View style={styles.btnContent}>
-            {icon && !iconRight && <Feather name={icon} size={18} color={colors.textOnPrimary} style={{ marginRight: spacing.sm }} />}
+            {icon && !iconRight && (
+              <Feather
+                name={icon}
+                size={18}
+                color={resolvedIconColor}
+                style={{ marginRight: spacing.sm }}
+              />
+            )}
             <Text style={styles.btnPrimaryText}>{title}</Text>
-            {icon && iconRight && <Feather name={icon} size={18} color={colors.textOnPrimary} style={{ marginLeft: spacing.sm }} />}
+            {icon && iconRight && (
+              <Feather
+                name={icon}
+                size={18}
+                color={resolvedIconColor}
+                style={{ marginLeft: spacing.sm }}
+              />
+            )}
           </View>
         )}
       </Pressable>
@@ -168,7 +258,8 @@ export const PrimaryButton = ({
   );
 };
 
-export const SecondaryButton = ({ title, onPress, icon, disabled = false, fullWidth = true, style }) => {
+/* [MERGE] Developer 2's SecondaryButton: adds buttonStyle override. */
+export const SecondaryButton = ({ title, onPress, icon, disabled = false, fullWidth = true, style, buttonStyle }) => {
   const { scale, onPressIn, onPressOut } = usePressScale();
   return (
     <Animated.View style={[fullWidth && { alignSelf: 'stretch' }, { transform: [{ scale }] }, style]}>
@@ -178,7 +269,7 @@ export const SecondaryButton = ({ title, onPress, icon, disabled = false, fullWi
         onPressOut={onPressOut}
         disabled={disabled}
         accessibilityRole="button"
-        style={[styles.btnBase, styles.btnSecondary, disabled && { opacity: 0.5 }]}
+        style={[styles.btnBase, styles.btnSecondary, buttonStyle, disabled && { opacity: 0.5 }]}
       >
         <View style={styles.btnContent}>
           {icon && <Feather name={icon} size={18} color={colors.primary} style={{ marginRight: spacing.sm }} />}
@@ -191,8 +282,16 @@ export const SecondaryButton = ({ title, onPress, icon, disabled = false, fullWi
 
 /* -------------------------------------------------------------------------- */
 /*  PillButton — compact rounded action (e.g. "Add Product" in a header)        */
+/*    [MERGE] keeps Developer 2's buttonStyle override.                         */
 /* -------------------------------------------------------------------------- */
-export const PillButton = ({ title, onPress, icon = 'plus', variant = 'solid', style }) => {
+export const PillButton = ({
+  title,
+  onPress,
+  icon = 'plus',
+  variant = 'solid',
+  style,
+  buttonStyle,
+}) => {
   const { scale, onPressIn, onPressOut } = usePressScale();
   const isSolid = variant === 'solid';
   return (
@@ -203,7 +302,11 @@ export const PillButton = ({ title, onPress, icon = 'plus', variant = 'solid', s
         onPressOut={onPressOut}
         accessibilityRole="button"
         accessibilityLabel={title}
-        style={[styles.pillBtn, isSolid ? styles.pillBtnSolid : styles.pillBtnGhost]}
+        style={[
+          styles.pillBtn,
+          isSolid ? styles.pillBtnSolid : styles.pillBtnGhost,
+          buttonStyle,
+        ]}
       >
         {!!icon && (
           <Feather
@@ -345,9 +448,10 @@ export const Spinner = ({ size = 88, icon, emoji }) => {
 };
 
 /* -------------------------------------------------------------------------- */
-/*  ProgressBar — animated, brand-purple fill                                   */
+/*  ProgressBar — animated brand fill                                           */
+/*    [MERGE] keeps Developer 2's fillColor override.                           */
 /* -------------------------------------------------------------------------- */
-export const ProgressBar = ({ value = 0, height = 44, showLabel = true, style }) => {
+export const ProgressBar = ({ value = 0, height = 44, showLabel = true, fillColor, style }) => {
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(anim, {
@@ -360,7 +464,13 @@ export const ProgressBar = ({ value = 0, height = 44, showLabel = true, style })
   const width = anim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] });
   return (
     <View style={[styles.progressTrack, { height, borderRadius: height / 2 }, style]}>
-      <Animated.View style={[styles.progressFill, { width, borderRadius: height / 2 }]} />
+      <Animated.View
+        style={[
+          styles.progressFill,
+          { width, borderRadius: height / 2 },
+          fillColor && { backgroundColor: fillColor },
+        ]}
+      />
       {showLabel && <Text style={styles.progressLabel}>{Math.round(value)}%</Text>}
     </View>
   );
@@ -428,13 +538,30 @@ export const LoadingState = ({ message = 'Please wait…' }) => (
 
 /* -------------------------------------------------------------------------- */
 /*  MainHeader — primary app screens (Home / Settings / Product Reg.)           */
-/*    left: optional greeting eyebrow + title   right: optional round action    */
+/*    [MERGE] keeps Developer 2's backButtonStyle prop.                         */
 /* -------------------------------------------------------------------------- */
-export const MainHeader = ({ title, greeting, onAction, actionIcon = 'user', right, leadingIcon, onBack, style }) => (
+export const MainHeader = ({
+  title,
+  greeting,
+  onAction,
+  actionIcon = 'user',
+  right,
+  leadingIcon,
+  onBack,
+  backButtonStyle,
+  style,
+}) => (
   <View style={[styles.mainHeader, style]}>
     {onBack && (
       <View style={{ marginRight: spacing.md }}>
-        <IconButton name="arrow-left" onPress={onBack} variant="solid" size={20} accessibilityLabel="Go back" />
+        <IconButton
+          name="arrow-left"
+          onPress={onBack}
+          variant="solid"
+          size={20}
+          buttonStyle={backButtonStyle}
+          accessibilityLabel="Go back"
+        />
       </View>
     )}
     <View style={styles.mainHeaderLeft}>
@@ -469,9 +596,19 @@ export const MainHeader = ({ title, greeting, onAction, actionIcon = 'user', rig
 /* -------------------------------------------------------------------------- */
 /*  SetupHeader — contextual header for setup / operation screens              */
 /*    back + centered title/subtitle + optional "2/6" step pill + progress line */
-/*    Progress is purely visual; pass step/totalSteps you already know.         */
+/*    [MERGE] keeps Developer 2's backButtonStyle prop.                         */
 /* -------------------------------------------------------------------------- */
-export const SetupHeader = ({ title, subtitle, onBack, step, totalSteps, right, showProgress = true, leadingIcon }) => {
+export const SetupHeader = ({
+  title,
+  subtitle,
+  onBack,
+  backButtonStyle,
+  step,
+  totalSteps,
+  right,
+  showProgress = true,
+  leadingIcon,
+}) => {
   const hasSteps = typeof step === 'number' && typeof totalSteps === 'number' && totalSteps > 0;
   const pct = hasSteps ? Math.max(0, Math.min(1, step / totalSteps)) : 0;
   // With no back button, a leading icon chip + left-aligned title fills the row
@@ -481,7 +618,14 @@ export const SetupHeader = ({ title, subtitle, onBack, step, totalSteps, right, 
     <View style={styles.setupHeaderWrap}>
       <View style={styles.setupHeaderRow}>
         {onBack ? (
-          <IconButton name="arrow-left" onPress={onBack} variant="solid" size={20} accessibilityLabel="Go back" />
+          <IconButton
+            name="arrow-left"
+            onPress={onBack}
+            variant="solid"
+            size={20}
+            buttonStyle={backButtonStyle}
+            accessibilityLabel="Go back"
+          />
         ) : leadingIcon ? (
           <View style={styles.headerLeadChip}>
             <Feather name={leadingIcon} size={20} color={colors.primary} />
@@ -588,6 +732,210 @@ export const FootNote = ({ children, style }) => (
   <Text style={[styles.footNote, style]}>{children}</Text>
 );
 
+/* -------------------------------------------------------------------------- */
+/*  ResponsiveText — font size scales (moderately) with the device width        */
+/*    Pass `size` as the design value; it clamps so it stays readable.          */
+/*    [Developer 1]                                                             */
+/* -------------------------------------------------------------------------- */
+export const ResponsiveText = ({ size = 14, weight, color, style, children, ...rest }) => {
+  const { ms } = useResponsive();
+  return (
+    <Text
+      style={[
+        { fontSize: ms(size) },
+        weight && { fontWeight: weight },
+        color && { color },
+        style,
+      ]}
+      {...rest}
+    >
+      {children}
+    </Text>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/*  ResponsiveContainer — centers + caps content width on large screens         */
+/*    Phones get full width; tablets / large phones stop stretching at maxWidth.*/
+/*    [Developer 1]                                                             */
+/* -------------------------------------------------------------------------- */
+export const ResponsiveContainer = ({ children, maxWidth = 560, style }) => (
+  <View style={[styles.responsiveContainer, style]}>
+    <View style={{ width: '100%', maxWidth, flex: 1 }}>{children}</View>
+  </View>
+);
+
+/* -------------------------------------------------------------------------- */
+/*  AppFooter (CommonFooter) — the one "Powered by EVOLUZN" footer              */
+/*    [Developer 1]                                                             */
+/* -------------------------------------------------------------------------- */
+/*  Replaces every hand-rolled footer. It is safe-area aware: on Android three- */
+/*  button navigation it sits ABOVE the system nav bar (never behind it).       */
+/*                                                                              */
+/*    variant="light"  -> for light/surface backgrounds (muted purple text)     */
+/*    variant="onDark" -> for the brand-purple backgrounds (white text)         */
+/*    inline           -> set when the footer is already inside a ScrollView /   */
+/*                        padded content; then it adds NO safe-area padding      */
+/*                        because the scroll/parent already clears the nav bar.  */
+/* -------------------------------------------------------------------------- */
+export const AppFooter = ({ variant = 'light', inline = false, row = false, style }) => {
+  const insets = useSafeAreaInsets();
+  const onDark = variant === 'onDark';
+  const paddingBottom = inline ? spacing.lg : Math.max(insets.bottom, spacing.md) + spacing.sm;
+
+  // Single-line variant: "POWERED BY EVOLUZN" on one row, never wrapping.
+  if (row) {
+    return (
+      <View style={[styles.footer, { paddingBottom }, style]}>
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          style={styles.footerRowText}
+        >
+          <Text style={[styles.footerEyebrow, onDark ? styles.footerEyebrowDark : null]}>
+            POWERED BY{' '}
+          </Text>
+          <Text style={[styles.footerBrandInline, onDark ? styles.footerBrandDark : null]}>
+            EVOLUZN
+          </Text>
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.footer, { paddingBottom }, style]}>
+      <Text style={[styles.footerEyebrow, onDark ? styles.footerEyebrowDark : null]}>
+        POWERED BY
+      </Text>
+      <Text style={[styles.footerBrand, onDark ? styles.footerBrandDark : null]}>
+        EVOLUZN
+      </Text>
+    </View>
+  );
+};
+// Aliases so screens can import whichever name reads best.
+export const CommonFooter = AppFooter;
+// Single-line "POWERED BY EVOLUZN" by default — the one shared brand footer.
+export const PoweredByEvoluzn = (props) => <AppFooter row {...props} />;
+
+/* -------------------------------------------------------------------------- */
+/*  BrandLogo — one responsive logo used everywhere (splash / card / header)    */
+/*    [Developer 1]                                                             */
+/* -------------------------------------------------------------------------- */
+/*  Sizes as a % of screen width with min/max caps, aspectRatio from the image, */
+/*  and resizeMode="contain" so it never distorts. variant sets the width band. */
+/*  Pass your own `source` + `ratio` (width/height of the asset).               */
+/*  NOTE: the Softel logo's require() path + styling live in the SCREENS that    */
+/*  pass `source`/`style` here — this component was left untouched by the merge. */
+/* -------------------------------------------------------------------------- */
+export const BRAND_LOGO_VARIANTS = {
+  // widthPct of screen, clamped between min and max (device-independent)
+  splash: { widthPct: 0.82, min: 230, max: 360 },
+  card: { widthPct: 0.84, min: 220, max: 340 },
+  header: { widthPct: 0.62, min: 200, max: 300 },
+};
+
+export const BrandLogo = ({ source, ratio, variant = 'header', style, ...rest }) => {
+  const { width } = useResponsive();
+  const v = BRAND_LOGO_VARIANTS[variant] || BRAND_LOGO_VARIANTS.header;
+  const w = Math.round(clampNumLocal(width * v.widthPct, v.min, v.max));
+
+  // true ratio from the asset; fall back to the prop
+  const asset = Image.resolveAssetSource(source);
+  const r = asset?.width && asset?.height ? asset.width / asset.height : (ratio || 180 / 48);
+
+  return (
+    <View style={[{ width: w, height: Math.round(w / r), overflow: 'hidden' }, style]}>
+      <Image
+        source={source}
+        resizeMode="contain"
+        style={{ width: '100%', height: '100%' }}
+        {...rest}
+      />
+    </View>
+  );
+};
+const clampNumLocal = (val, min, max) => Math.min(Math.max(val, min), max);
+
+/* -------------------------------------------------------------------------- */
+/*  ScreenWrapper — the canonical screen shell                                  */
+/*    [Developer 1]                                                             */
+/* -------------------------------------------------------------------------- */
+/*  Safe-area + status bar + standard horizontal padding + optional branded     */
+/*  footer pinned above the system nav bar + optional scroll/keyboard handling. */
+/*  Use this for new screens so header / content / footer follow one standard.  */
+/*                                                                              */
+/*    footer      -> true | 'light' | 'onDark' to render the AppFooter          */
+/*    scroll      -> wrap children in a ScrollView (keyboard-friendly forms)     */
+/*    center      -> vertically center non-scrolling content                    */
+/* -------------------------------------------------------------------------- */
+export const ScreenWrapper = ({
+  children,
+  background = colors.background,
+  barStyle = 'dark-content',
+  padded = true,
+  footer = false,
+  scroll = false,
+  center = false,
+  edges,
+  contentStyle,
+  style,
+}) => {
+  // When a footer is shown we own the bottom inset via AppFooter, so the
+  // SafeAreaView should not also pad the bottom (that would double it up).
+  const resolvedEdges = edges || (footer ? ['top', 'left', 'right'] : ['top', 'left', 'right', 'bottom']);
+  const footerVariant = footer === 'onDark' ? 'onDark' : 'light';
+  const padStyle = padded && { paddingHorizontal: layout.screenPaddingHorizontal };
+
+  const inner = scroll ? (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[
+          { flexGrow: 1 },
+          padStyle,
+          center && { justifyContent: 'center' },
+          contentStyle,
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {children}
+      </ScrollView>
+    </KeyboardAvoidingView>
+  ) : (
+    <View style={[{ flex: 1 }, padStyle, center && { justifyContent: 'center' }, contentStyle]}>
+      {children}
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={[{ flex: 1, backgroundColor: background }, style]} edges={resolvedEdges}>
+      <StatusBar barStyle={barStyle} backgroundColor={background} />
+      {inner}
+      {footer ? <AppFooter variant={footerVariant} /> : null}
+    </SafeAreaView>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/*  CommonHeader — single import name for the shared headers                     */
+/*    [Developer 1]                                                             */
+/*    Defaults to the back + centered-title AppHeader. Pass variant="main" for  */
+/*    the primary-screen header or variant="setup" for the setup/progress one.  */
+/*    [MERGE] passes through Developer 2's extra props (backButtonStyle, etc.)   */
+/*    because it spreads ...props straight into the chosen header.               */
+/* -------------------------------------------------------------------------- */
+export const CommonHeader = ({ variant = 'default', ...props }) => {
+  if (variant === 'main') return <MainHeader {...props} />;
+  if (variant === 'setup') return <SetupHeader {...props} />;
+  return <AppHeader {...props} />;
+};
+
 /* ========================================================================== */
 const androidTopPad = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
 
@@ -636,9 +984,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xxl,
   },
   btnContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  btnPrimary: { backgroundColor: colors.primary, ...shadows.button },
+
+  // [MERGE — CONFLICT RESOLVED] GREEN: main action/navigation buttons (Developer 2).
+  // Original was colors.primary (purple); Developer 2 deliberately changed it.
+  btnPrimary: { backgroundColor: '#7DC24D', ...shadows.button },
+
   btnPrimaryDisabled: { backgroundColor: colors.disabledBg, shadowOpacity: 0, elevation: 0 },
   btnPrimaryText: { ...typography.button, color: colors.textOnPrimary },
+
+  // Original secondary button colour retained (both developers agree).
   btnSecondary: { backgroundColor: colors.primaryTint, borderWidth: 1, borderColor: colors.primaryTintBorder },
   btnSecondaryText: { ...typography.button, color: colors.primary },
 
@@ -660,7 +1014,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     borderRadius: radii.pill,
   },
-  pillBtnSolid: { backgroundColor: colors.primary, ...shadows.button },
+
+  // [MERGE — CONFLICT RESOLVED] GREEN: solid pill actions such as Add Product (Developer 2).
+  pillBtnSolid: { backgroundColor: '#7DC24D', ...shadows.button },
+
+  // Original ghost pill colour retained (both developers agree).
   pillBtnGhost: { backgroundColor: colors.primaryTint, borderWidth: 1, borderColor: colors.primaryTintBorder },
   pillBtnText: { fontSize: 13, fontWeight: '800', letterSpacing: 0.3, color: colors.textOnPrimary },
 
@@ -798,6 +1156,40 @@ const styles = StyleSheet.create({
   /* Footer */
   footNote: { ...typography.bodySmall, color: colors.textMuted, textAlign: 'center' },
 
+  /* Branded app footer (Powered by EVOLUZN) — [Developer 1] */
+  footer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: spacing.md,
+    paddingHorizontal: layout.screenPaddingHorizontal,
+  },
+  footerEyebrow: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 2,
+    color: colors.textMuted,
+  },
+  footerEyebrowDark: { color: '#A295C4' },
+  footerBrand: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    color: colors.primary,
+    marginTop: 3,
+  },
+  // Inline (single-line) brand word — no marginTop so it stays on the same row.
+  footerBrandInline: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    color: colors.primary,
+  },
+  footerRowText: { textAlign: 'center' },
+  footerBrandDark: { color: colors.textOnPrimary },
+
+  /* Responsive container — [Developer 1] */
+  responsiveContainer: { flex: 1, width: '100%', alignItems: 'center' },
+
   /* Dialog */
   dialogOverlay: {
     flex: 1,
@@ -869,4 +1261,14 @@ export default {
   EmptyState,
   LoadingState,
   FootNote,
+  // [Developer 1] additions:
+  AppFooter,
+  CommonFooter,
+  PoweredByEvoluzn,
+  BrandLogo,
+  ScreenWrapper,
+  ResponsiveContainer,
+  ResponsiveText,
+  CommonHeader,
+  useResponsive,
 };

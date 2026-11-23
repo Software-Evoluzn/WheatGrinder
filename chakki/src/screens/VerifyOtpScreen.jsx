@@ -1,9 +1,27 @@
+// =============================================================================
+//  VerifyOtpScreen
+// -----------------------------------------------------------------------------
+//  MERGED (Developer 1 + Developer 2):
+//    The two versions are IDENTICAL except for two things:
+//      1. SafeAreaView import — Developer 1: 'react-native-safe-area-context'
+//         (kept, matches the rest of the merged app). Developer 2: core RN.
+//      2. Footer — Developer 1: shared <AppFooter variant="onDark" inline />
+//         (kept). Developer 2: plain <Text>Powered by EVOLUZN</Text>.
+//
+//    All logic/API/validation is byte-identical in both and preserved exactly:
+//      • 6-digit OTP (6 inputs + 6 refs), auto-advance + backspace focus
+//      • POST ${API_BASE_URL}/verify-reset-otp  -> ResetPasswordScreen
+//      • POST ${API_BASE_URL}/forgot-password   -> resend OTP
+//      • loading / resending states, Alert error handling, keyboard dismiss
+//    Developer 2's footerBrandText style is retained below (unused with
+//    AppFooter) so reverting to the plain-text footer is a one-line change.
+//    The capture.png logo require() path is unchanged.
+// =============================================================================
 import React, { useState, useRef } from 'react';
 import {
   StyleSheet,
   Text,
   View,
-  SafeAreaView,
   StatusBar,
   TextInput,
   TouchableOpacity,
@@ -12,9 +30,10 @@ import {
   TouchableWithoutFeedback,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import IP_CONFIG from '../services/ip.json';
-import { PrimaryButton } from './ui';
+import { PrimaryButton, AppFooter } from './ui';
 import { colors, spacing, radii, typography, shadows } from './theme';
 
 const API_BASE_URL = IP_CONFIG.BASE_URL;
@@ -172,7 +191,9 @@ const VerifyOtpScreen = ({ route, navigation }) => {
               </Text>
             </TouchableOpacity>
 
-            <Text style={styles.footerBrandText}>Powered by EVOLUZN</Text>
+            {/* [MERGE] Developer 1 shared footer. Developer 2 used:
+                <Text style={styles.footerBrandText}>Powered by EVOLUZN</Text> */}
+            <AppFooter variant="onDark" inline />
           </View>
 
           {/* FLOATING OTP CARD */}
@@ -265,6 +286,7 @@ const styles = StyleSheet.create({
     color: colors.textOnPrimary,
     fontWeight: '700',
   },
+  // [Developer 2] retained so the plain-text footer can be restored easily.
   footerBrandText: {
     color: 'rgba(255,255,255,0.7)',
     fontSize: 12,
