@@ -2,7 +2,7 @@ import os
 
 class Config:
     GMAIL_USER = os.getenv("GMAIL_USER" , "evoluzn999@gmail.com")
-    GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD","euhf nozx wsjy pwbr")
+    GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD","ewmjsmoehhhvnxuz")
     
     DB_CONFIG = {
         "host" : os.getenv("DB_HOST" , "localhost"),

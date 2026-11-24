@@ -53,7 +53,7 @@ const WelcomeScreen = ({ navigation }) => {
 
       if (autoLogin === 'true' && customerId) {
         // Login screen skip karke seedha Main par jao
-        navigation.replace('Main', { customer_id: Number(customerId) });
+        navigation.replace('ConnectWifiScreen', { customer_id: Number(customerId) });
         return;
       }
     } catch (error) {

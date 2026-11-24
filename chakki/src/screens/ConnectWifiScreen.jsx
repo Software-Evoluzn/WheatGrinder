@@ -4,8 +4,6 @@ import {
   Text,
   TextInput,
   StyleSheet,
-  Animated,
-  Easing,
   Modal,
   Pressable,
   ScrollView,
@@ -25,7 +23,6 @@ import {
   IconButton,
   StepIndicator,
   Eyebrow,
-  StatusIcon,
   PrimaryButton,
   StatusBadge,
   BottomActionBar,
@@ -41,6 +38,7 @@ const MAX_VERIFY_MS = 30000;
 const UNREACHABLE_STREAK_OK = 2;
 
 const FLOW_STAGE = {
+  ASK_REGISTER: 'ask_register',       // 0. Ask user if they want to register a new device
   ENTER_ID: 'enter_id',               // 1. User enters Device ID
   CONNECTING_AP: 'connecting_ap',     // 2. Searching & connecting to softelApXXXXXX
   SELECT_NETWORK: 'select_network',   // 3. Scanning & showing Wi-Fi list + password
@@ -128,51 +126,13 @@ const HeaderMenu = () => {
 };
 
 /* -------------------------------------------------------------------------- */
-/*  WifiHero                                                                  */
-/* -------------------------------------------------------------------------- */
-const HERO = 210;
-const center = (size) => (HERO - size) / 2;
-
-const WifiHero = ({ connected }) => {
-  const pulse = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const pulseLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-      ])
-    );
-    pulseLoop.start();
-    return () => pulseLoop.stop();
-  }, [pulse]);
-
-  const glowScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.08] });
-  const glowOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.55] });
-
-  return (
-    <View style={styles.hero}>
-      <Animated.View style={[styles.glow, { transform: [{ scale: glowScale }], opacity: glowOpacity }]} />
-      <View style={styles.ringStatic} />
-      <View style={styles.ringArc} />
-      <View style={styles.disc}>
-        <StatusIcon icon="wifi" variant={connected ? 'success' : 'info'} size={54} />
-      </View>
-      <View style={styles.deviceChip}>
-        <Feather name="cpu" size={16} color={colors.primary} />
-      </View>
-    </View>
-  );
-};
-
-/* -------------------------------------------------------------------------- */
 /*  Main Screen                                                               */
 /* -------------------------------------------------------------------------- */
 const ConnectWifiScreen = ({ route, navigation }) => {
   const { firebaseUid, serialNo } = route?.params || {};
 
-  // Stage & Device ID states
-  const [stage, setStage] = useState(FLOW_STAGE.ENTER_ID);
+  // Stage & Device ID states (Starts by asking if user wants to register a new device)
+  const [stage, setStage] = useState(FLOW_STAGE.ASK_REGISTER);
   const [deviceId, setDeviceId] = useState('');
   const [targetApSsid, setTargetApSsid] = useState('');
   const [powerPromptVisible, setPowerPromptVisible] = useState(false);
@@ -209,6 +169,18 @@ const ConnectWifiScreen = ({ route, navigation }) => {
     return () => stopAllTimers();
   }, []);
 
+  const navigateToHome = () => {
+    stopAllTimers();
+    if (navigation?.reset) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Main' }],
+      });
+    } else if (navigation?.navigate) {
+      navigation.navigate('Main');
+    }
+  };
+
   /* -------------------- Permissions Helper -------------------- */
   const requestLocationPermission = async () => {
     if (Platform.OS === 'android') {
@@ -227,7 +199,6 @@ const ConnectWifiScreen = ({ route, navigation }) => {
 
   /* -------------------- Step 1: Device ID Focus & Input -------------------- */
   const handleDeviceInputFocus = () => {
-    // Sabse pehle power supply prompt dikhao jab user Device ID pe click kare
     if (!hasShownPowerPrompt) {
       deviceInputRef.current?.blur();
       setHasShownPowerPrompt(true);
@@ -246,7 +217,6 @@ const ConnectWifiScreen = ({ route, navigation }) => {
     setDeviceId(text);
     setErrorMessage('');
   };
-
 
   const handleSearchAndConnectAp = async () => {
     const apName = formatDeviceApSsid(deviceId);
@@ -267,7 +237,6 @@ const ConnectWifiScreen = ({ route, navigation }) => {
     setStatusMessage(`Searching for ${apName}...`);
 
     try {
-      // Scan nearby networks first to search for the device Access Point
       const scannedNetworks = await WifiManager.loadWifiList();
       const matchedAp = (scannedNetworks || []).find(
         (net) => net.SSID && net.SSID.toLowerCase() === apName.toLowerCase()
@@ -276,7 +245,6 @@ const ConnectWifiScreen = ({ route, navigation }) => {
 
       setStatusMessage(`Connecting to ${exactSsidToConnect}...`);
 
-      // Connect directly to device AP using password "12345678"
       await WifiManager.connectToProtectedSSID(
         exactSsidToConnect,
         DEVICE_AP_PASSWORD,
@@ -284,7 +252,6 @@ const ConnectWifiScreen = ({ route, navigation }) => {
         false
       );
 
-      // Force traffic over Wi-Fi so 192.168.4.1 resolves to ESP32 instead of mobile data
       try {
         await WifiManager.forceWifiUsageWithOptions(true, { noResetOnDisconnect: false });
       } catch (e) {
@@ -293,7 +260,6 @@ const ConnectWifiScreen = ({ route, navigation }) => {
 
       setStatusMessage(`Connected to ${exactSsidToConnect}. Loading Wi-Fi list...`);
 
-      // Populate Wi-Fi list (reuse fresh scan if available, or trigger new scan)
       const filteredList = filterNearbyNetworks(scannedNetworks, exactSsidToConnect);
       if (filteredList.length > 0) {
         setWifiList(filteredList);
@@ -383,7 +349,6 @@ const ConnectWifiScreen = ({ route, navigation }) => {
       console.log('[ESP /save post info]:', e.message);
     }
 
-    // Verify ESP32 dropped its AP and joined router
     setStatusMessage('Verifying device connection...');
     elapsedRef.current = 0;
     unreachableStreak.current = 0;
@@ -420,14 +385,12 @@ const ConnectWifiScreen = ({ route, navigation }) => {
       `Device connected to "${selectedNetwork.SSID}"! Reconnecting phone to Wi-Fi...`
     );
 
-    // Release forced AP routing so phone can auto-reconnect to any saved Wi-Fi
     try {
       await WifiManager.forceWifiUsageWithOptions(false, { noResetOnDisconnect: false });
     } catch (e) {
       // ignore
     }
 
-    // Poll until phone connects to ANY valid Wi-Fi network (not the ESP AP)
     phoneWifiTimer.current = setInterval(async () => {
       try {
         const rawSsid = await WifiManager.getCurrentWifiSSID();
@@ -441,7 +404,6 @@ const ConnectWifiScreen = ({ route, navigation }) => {
         ) {
           stopAllTimers();
 
-          // Sync device Wi-Fi details to database once internet/Wi-Fi is back
           try {
             await saveDeviceWifi({
               deviceId: deviceId.trim(),
@@ -453,15 +415,7 @@ const ConnectWifiScreen = ({ route, navigation }) => {
             console.log('[DB Save Error]:', dbErr);
           }
 
-          // Navigate to Main/HomeScreen as soon as phone connects to any network
-          if (navigation?.reset) {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Main' }],
-            });
-          } else if (navigation?.navigate) {
-            navigation.navigate('Main');
-          }
+          navigateToHome();
         }
       } catch (err) {
         console.log('[Phone Wi-Fi Poll]:', err);
@@ -469,17 +423,22 @@ const ConnectWifiScreen = ({ route, navigation }) => {
     }, 2000);
   };
 
-  const isConnected =
-    stage === FLOW_STAGE.SELECT_NETWORK ||
-    stage === FLOW_STAGE.PROVISIONING ||
-    stage === FLOW_STAGE.WAITING_PHONE_NET;
-
   return (
     <Screen background={colors.background}>
       <MainHeader
-        greeting="Machine Status"
-        title="Wi-Fi Setup"
-        onBack={navigation?.goBack ? () => navigation.goBack() : undefined}
+        greeting={stage === FLOW_STAGE.ASK_REGISTER ? 'Device Setup' : 'Machine Status'}
+        title={stage === FLOW_STAGE.ASK_REGISTER ? 'New Device' : 'Wi-Fi Setup'}
+        onBack={
+          stage !== FLOW_STAGE.ASK_REGISTER
+            ? () => {
+                stopAllTimers();
+                setErrorMessage('');
+                setStage(FLOW_STAGE.ASK_REGISTER);
+              }
+            : navigation?.goBack
+            ? () => navigation.goBack()
+            : undefined
+        }
         right={<HeaderMenu />}
       />
 
@@ -488,19 +447,54 @@ const ConnectWifiScreen = ({ route, navigation }) => {
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[
+            styles.content,
+            stage === FLOW_STAGE.ASK_REGISTER && styles.contentCentered,
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <StepIndicator total={3} current={0} style={{ marginBottom: spacing.xl }} />
+          {/* ==================== STAGE 0: ASK NEW DEVICE REGISTRATION ==================== */}
+          {stage === FLOW_STAGE.ASK_REGISTER && (
+            <View style={styles.promptCard}>
+              <Eyebrow>Device Onboarding</Eyebrow>
+              <Text style={styles.promptTitle}>
+                Do you want to register a new device?
+              </Text>
+              <Text style={styles.promptSubtitle}>
+                Select Yes to configure a new machine and connect it to your Wi-Fi network, or continue directly to the home screen.
+              </Text>
 
-          <WifiHero connected={isConnected} />
+              <View style={styles.promptActions}>
+                <PrimaryButton
+                  title="YES, REGISTER NEW DEVICE"
+                  icon="plus-circle"
+                  onPress={() => setStage(FLOW_STAGE.ENTER_ID)}
+                />
 
-          <Eyebrow style={{ marginTop: spacing.xl }}>Step 1 of 3</Eyebrow>
-          <Text style={styles.title}>Connect your machine{'\n'}to Wi-Fi</Text>
-          <Text style={styles.message}>
-            Power on your machine, enter its Device ID, and tap Search to connect and select your Wi-Fi network.
-          </Text>
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={navigateToHome}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.secondaryButtonText}>No, Go to Home Screen</Text>
+                  <Feather name="arrow-right" size={16} color={colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* ==================== SETUP FLOW HEADER (STEPS 1-5) ==================== */}
+          {stage !== FLOW_STAGE.ASK_REGISTER && (
+            <View style={styles.headerBlock}>
+              <StepIndicator total={3} current={0} style={{ marginBottom: spacing.lg }} />
+              <Eyebrow>Step 1 of 3</Eyebrow>
+              <Text style={styles.title}>Connect your machine to Wi-Fi</Text>
+              <Text style={styles.message}>
+                Power on your machine, enter its Device ID, and tap Search to connect and select your Wi-Fi network.
+              </Text>
+            </View>
+          )}
 
           {/* ==================== STAGE 1 & 2: DEVICE ID INPUT ==================== */}
           {(stage === FLOW_STAGE.ENTER_ID || stage === FLOW_STAGE.CONNECTING_AP) && (
@@ -566,7 +560,6 @@ const ConnectWifiScreen = ({ route, navigation }) => {
                 Connected to {targetApSsid}
               </Text>
 
-              {/* Wi-Fi List */}
               <View style={styles.wifiListContainer}>
                 {wifiList.length === 0 && !isScanning ? (
                   <Text style={styles.emptyListText}>No Wi-Fi networks found. Tap Refresh.</Text>
@@ -604,7 +597,6 @@ const ConnectWifiScreen = ({ route, navigation }) => {
                 )}
               </View>
 
-              {/* Password Input once a network is selected */}
               {selectedNetwork && (
                 <View style={styles.passwordSection}>
                   <Text style={styles.passwordLabel}>
@@ -675,14 +667,14 @@ const ConnectWifiScreen = ({ route, navigation }) => {
         </BottomActionBar>
       )}
 
-      {/* Power Supply Prompt Dialog (shown first when clicking Device ID) */}
+      {/* Power Supply Prompt Dialog */}
       <AppDialog
         visible={powerPromptVisible}
         onClose={handleConfirmPowerSupply}
         icon="zap"
         title="Give Power Supply to Device"
-        message="Sabse pehle apne device ko power supply dein aur ON karein, phir apna Device ID enter karein."
-        confirmLabel="Power ON hai, Continue"
+        message="First, connect your device to the power supply and turn it ON. Then, enter your Device ID."
+        confirmLabel="Power ON , Continue"
         onConfirm={handleConfirmPowerSupply}
       />
     </Screen>
@@ -725,93 +717,80 @@ const styles = StyleSheet.create({
 
   content: {
     flexGrow: 1,
-    alignItems: 'center',
-    paddingHorizontal: spacing.xxl,
+    paddingHorizontal: spacing.xl,
     paddingTop: spacing.lg,
     paddingBottom: spacing.xxxl,
   },
-
-  hero: {
-    width: HERO,
-    height: HERO,
-    alignItems: 'center',
+  contentCentered: {
     justifyContent: 'center',
   },
-  glow: {
-    position: 'absolute',
-    width: 170,
-    height: 170,
-    top: center(170),
-    left: center(170),
-    borderRadius: 85,
-    backgroundColor: colors.primaryTint,
-  },
-  ringStatic: {
-    position: 'absolute',
-    width: 160,
-    height: 160,
-    top: center(160),
-    left: center(160),
-    borderRadius: 80,
-    borderWidth: 1,
-    borderColor: colors.primarySubtle,
-  },
-  ringArc: {
-    position: 'absolute',
-    width: 160,
-    height: 160,
-    top: center(160),
-    left: center(160),
-    borderRadius: 80,
-    borderWidth: 5,
-    borderColor: colors.primaryTintBorder,
-  },
-  disc: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
+
+  /* Initial Registration Prompt Card */
+  promptCard: {
     backgroundColor: colors.surface,
+    borderRadius: radii.xl,
     borderWidth: 1,
     borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: spacing.xxl,
     ...shadows.card,
   },
-  deviceChip: {
-    position: 'absolute',
-    bottom: center(160) - 4,
-    right: center(160) + 6,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.surface,
+  promptTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    marginTop: spacing.sm,
+    lineHeight: 29,
+    letterSpacing: 0.2,
+  },
+  promptSubtitle: {
+    ...typography.subtitle,
+    color: colors.textSecondary,
+    marginTop: spacing.md,
+    lineHeight: 22,
+  },
+  promptActions: {
+    marginTop: spacing.xxl,
+    gap: spacing.md,
+  },
+  secondaryButton: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    height: 50,
+    borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
-    ...shadows.subtle,
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing.lg,
+  },
+  secondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
   },
 
+  /* Clean Header Block */
+  headerBlock: {
+    marginBottom: spacing.sm,
+  },
   title: {
     fontSize: 22,
     fontWeight: '800',
     color: colors.textPrimary,
-    textAlign: 'center',
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
     letterSpacing: 0.2,
   },
   message: {
     ...typography.subtitle,
     color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
     lineHeight: 21,
-    maxWidth: 320,
   },
 
   stateCard: {
     alignSelf: 'stretch',
-    marginTop: spacing.xl,
+    marginTop: spacing.lg,
     backgroundColor: colors.surface,
     borderRadius: radii.xl,
     borderWidth: 1,
