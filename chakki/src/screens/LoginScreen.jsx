@@ -101,7 +101,7 @@ const LoginScreen = ({ navigation }) => {
           await AsyncStorage.removeItem('auto_login');
         }
 
-        navigation.replace('ConnectWifiScreen', {
+        navigation.replace('Main', {
           customer_id: data.customer_id,
         });
       }
@@ -143,7 +143,7 @@ const LoginScreen = ({ navigation }) => {
         await AsyncStorage.removeItem('auto_login');
       }
 
-      navigation.replace('ConnectWifiScreen', {
+      navigation.replace('Main', {
         customer_id: data.customer_id,
       });
     } catch (error) {
