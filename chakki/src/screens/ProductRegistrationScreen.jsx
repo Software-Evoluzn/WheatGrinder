@@ -130,6 +130,24 @@ const filterNearbyNetworks = (networks, currentApSsid) => {
   return Array.from(map.values());
 };
 
+
+
+// Location Service (GPS) ON hai ya nahi check karne ke liye
+const isLocationServiceEnabled = async () => {
+  if (Platform.OS !== 'android') return true;
+  try {
+    // Agar location service off hogi toh loadWifiList ya current SSID error dega
+    await WifiManager.loadWifiList();
+    return true;
+  } catch (err) {
+    const msg = String(err?.message || err || '');
+    if (/location/i.test(msg)) {
+      return false;
+    }
+    return true; // Koi aur error hai toh aage handle hoga
+  }
+};
+
 // Socket se device online hai ya nahi
 const checkDeviceOnlineStatus = (serialNumber, timeoutMs = 5000) =>
   new Promise((resolve) => {
@@ -296,7 +314,7 @@ const ProductRegistrationScreen = ({ navigation, route }) => {
           await sleep(1500);
           wifiOn = await WifiManager.isEnabled();
         } catch (e) {
-          // ignore
+          console.log('[Wi-Fi enable error]:', e);
         }
       }
       if (!wifiOn) {
@@ -308,7 +326,10 @@ const ProductRegistrationScreen = ({ navigation, route }) => {
             { text: 'Cancel', style: 'cancel' },
             {
               text: 'Open Settings',
-              onPress: () => Linking.sendIntent('android.settings.WIFI_SETTINGS').catch(() => Linking.openSettings()),
+              onPress: () =>
+                Linking.sendIntent('android.settings.WIFI_SETTINGS').catch(() =>
+                  Linking.openSettings()
+                ),
             },
           ]
         );
@@ -316,6 +337,27 @@ const ProductRegistrationScreen = ({ navigation, route }) => {
       }
     } catch (e) {
       console.log('[Wi-Fi state check error]:', e);
+    }
+
+    // 3. Phone ki Location (GPS) Service ON Check
+    const locationOn = await isLocationServiceEnabled();
+    if (!locationOn) {
+      setStage(STAGE.SCAN);
+      Alert.alert(
+        'Turn ON Location',
+        'Please turn ON your phone Location (GPS) to scan and connect to the device.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Open Location Settings',
+            onPress: () =>
+              Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS').catch(() =>
+                Linking.openSettings()
+              ),
+          },
+        ]
+      );
+      return;
     }
 
     setTargetApSsid(apName);
@@ -353,8 +395,39 @@ const ProductRegistrationScreen = ({ navigation, route }) => {
       console.log('[AP Connect Error]:', err);
       setStage(STAGE.SCAN);
       const msg = String(err?.message || err || '');
-      if (/enable wifi manually/i.test(msg)) {
+
+      if (/enable wifi manually|wifi.*off|disabled/i.test(msg)) {
         setErrorMessage('Phone Wi-Fi is OFF. Please turn ON Wi-Fi from settings and scan the QR again.');
+        Alert.alert(
+          'Turn ON Wi-Fi',
+          'Please turn ON your phone Wi-Fi, then scan the QR again.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open Settings',
+              onPress: () =>
+                Linking.sendIntent('android.settings.WIFI_SETTINGS').catch(() =>
+                  Linking.openSettings()
+                ),
+            },
+          ]
+        );
+      } else if (/location/i.test(msg)) {
+        setErrorMessage('Phone Location (GPS) is OFF. Please turn ON Location and scan the QR again.');
+        Alert.alert(
+          'Turn ON Location',
+          'Please turn ON your phone Location (GPS) to scan and connect to the device.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open Location Settings',
+              onPress: () =>
+                Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS').catch(() =>
+                  Linking.openSettings()
+                ),
+            },
+          ]
+        );
       } else {
         setErrorMessage(
           `Could not connect to "${apName}". Make sure the device is powered ON and nearby, then scan again.`
@@ -370,12 +443,30 @@ const ProductRegistrationScreen = ({ navigation, route }) => {
       setWifiList(filterNearbyNetworks(networks, overrideApSsid || targetApSsid));
     } catch (err) {
       console.log('[Wi-Fi Scan Error]:', err);
-      Alert.alert('Scan Error', 'Unable to fetch Wi-Fi list. Tap refresh to try again.');
+      const msg = String(err?.message || err || '');
+
+      if (/location/i.test(msg)) {
+        Alert.alert(
+          'Turn ON Location',
+          'Location (GPS) is required to scan nearby Wi-Fi networks.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open Location Settings',
+              onPress: () =>
+                Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS').catch(() =>
+                  Linking.openSettings()
+                ),
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Scan Error', 'Unable to fetch Wi-Fi list. Tap refresh to try again.');
+      }
     } finally {
       setIsScanning(false);
     }
   };
-
   // ==========================================================
   // STEP 4: PASSWORD DEVICE KO BHEJO (ESP32)
   // ==========================================================
