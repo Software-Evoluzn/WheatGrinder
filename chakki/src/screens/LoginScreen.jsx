@@ -9,10 +9,10 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   Alert,
   StatusBar,
   useWindowDimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -25,18 +25,25 @@ import {
   loginWithBiometricApi,
   getBiometricCustomerId,
 } from '../services/AuthService';
-import { AppFooter, BrandLogo } from './ui';
+import { BrandLogo } from './ui';
+
+const SOFTEL_LOGO = require('../assets/images/Softel Millet mill logo 2.png');
+const RASOI_LOGO = require('../assets/images/capture12.png');
 
 const rnBiometrics = new ReactNativeBiometrics();
 
 const LoginScreen = ({ navigation }) => {
   const { height: screenH } = useWindowDimensions();
-  // Where the purple area starts (follows the card so the card straddles white/purple)
+  const isCompact = screenH < 760;
+
+  // Where the purple area starts
   const [purpleTop, setPurpleTop] = useState(Math.round(screenH * 0.55));
+
   const onCardLayout = (e) => {
     const { y, height } = e.nativeEvent.layout;
-    setPurpleTop(Math.round(y + height * 0.8));
+    setPurpleTop(Math.round(y + height * 0.78));
   };
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -67,7 +74,7 @@ const LoginScreen = ({ navigation }) => {
     }
   };
 
-  // Option 2: Biometric Login Handler
+  // Biometric Login Handler
   const handleBiometricLogin = async () => {
     if (!savedBioCustomerId) {
       Alert.alert(
@@ -116,7 +123,7 @@ const LoginScreen = ({ navigation }) => {
     }
   };
 
-  // Option 1: Email & Password Login Handler
+  // Email & Password Login Handler
   const handleLogin = async () => {
     if (!email.trim()) {
       Alert.alert('Error', 'Please enter email');
@@ -155,36 +162,51 @@ const LoginScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView
+      style={styles.container}
+      edges={['top', 'bottom', 'left', 'right']}
+    >
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={styles.inner}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContainer}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-        >
-          {/* Purple area behind the lower part of the card (full width, to the bottom) */}
+        <View style={styles.screenBody}>
           <View style={[styles.purpleBg, { top: purpleTop }]} />
 
-          {/* Logo: same component and size as Home */}
-          <View style={styles.logoWrap}>
-            <BrandLogo
-              source={require('../assets/images/capture.png')}
-              ratio={320 / 86}
-              variant="header"
+          {/* Logos */}
+          <View style={[styles.logoWrap, isCompact && styles.logoWrapCompact]}>
+            <Image
+              source={SOFTEL_LOGO}
+              style={[styles.millLogo, isCompact && styles.millLogoCompact]}
+              resizeMode="contain"
             />
+
+            <Text style={[styles.byText, isCompact && styles.byTextCompact]}>
+              by
+            </Text>
+
+            <View style={styles.rasoiLogoWrap}>
+              <BrandLogo
+                source={RASOI_LOGO}
+                ratio={320 / 60}
+                variant="header"
+              />
+            </View>
           </View>
 
-          {/* Login card */}
-          <View style={styles.loginCard} onLayout={onCardLayout}>
-            <Text style={styles.loginTitle}>Login</Text>
+          {/* Login Card */}
+          <View
+            style={[styles.loginCard, isCompact && styles.loginCardCompact]}
+            onLayout={onCardLayout}
+          >
+            <Text style={[styles.loginTitle, isCompact && styles.loginTitleCompact]}>
+              Login
+            </Text>
 
             <TextInput
-              style={styles.input}
+              style={[styles.input, isCompact && styles.inputCompact]}
               value={email}
               onChangeText={setEmail}
               placeholder="Email"
@@ -193,7 +215,12 @@ const LoginScreen = ({ navigation }) => {
               autoCapitalize="none"
             />
 
-            <View style={styles.passwordContainer}>
+            <View
+              style={[
+                styles.passwordContainer,
+                isCompact && styles.inputCompact,
+              ]}
+            >
               <TextInput
                 style={styles.passwordInput}
                 value={password}
@@ -202,7 +229,10 @@ const LoginScreen = ({ navigation }) => {
                 placeholderTextColor="#777"
                 secureTextEntry={!showPassword}
               />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+              >
                 <Feather
                   name={showPassword ? 'eye-off' : 'eye'}
                   size={20}
@@ -211,7 +241,13 @@ const LoginScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.optionsRow}>
+            {/* Auto Login and Forgot Password */}
+            <View
+              style={[
+                styles.optionsRow,
+                isCompact && styles.optionsRowCompact,
+              ]}
+            >
               <TouchableOpacity
                 style={styles.checkboxRow}
                 onPress={() => setAutoLogin(!autoLogin)}
@@ -233,36 +269,47 @@ const LoginScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
+            {/* Login Button */}
             <TouchableOpacity
-              style={styles.loginButton}
+              style={[styles.loginButton, isCompact && styles.loginButtonCompact]}
               onPress={handleLogin}
               disabled={loading}
               activeOpacity={0.8}
             >
               <Text style={styles.loginButtonText}>
-                {loading ? 'Logging in...' : 'Login'}
+                {loading ? 'Logging in...' : 'LOGIN'}
               </Text>
             </TouchableOpacity>
 
+            {/* Biometric Login */}
             {savedBioCustomerId && (
               <>
-                <View style={styles.dividerRow}>
+                <View
+                  style={[
+                    styles.dividerRow,
+                    isCompact && styles.dividerRowCompact,
+                  ]}
+                >
                   <View style={styles.dividerLine} />
                   <Text style={styles.dividerText}>OR</Text>
                   <View style={styles.dividerLine} />
                 </View>
 
                 <TouchableOpacity
-                  style={styles.biometricFullButton}
+                  style={[
+                    styles.biometricFullButton,
+                    isCompact && styles.biometricButtonCompact,
+                  ]}
                   onPress={handleBiometricLogin}
                   disabled={loading}
                   activeOpacity={0.8}
                 >
                   <MaterialCommunityIcons
                     name="fingerprint"
-                    size={24}
+                    size={22}
                     color="#56327A"
                   />
+
                   <Text style={styles.biometricButtonText}>
                     Login with Biometric
                   </Text>
@@ -271,22 +318,23 @@ const LoginScreen = ({ navigation }) => {
             )}
           </View>
 
-          {/* Register (on purple) */}
-          <View style={styles.registerContainer}>
+          {/* Register */}
+          <View
+            style={[
+              styles.registerContainer,
+              isCompact && styles.registerContainerCompact,
+            ]}
+          >
             <Text style={styles.registerText}>Not Registered?</Text>
+
             <TouchableOpacity
               style={styles.registerButton}
               onPress={() => navigation.navigate('Register')}
             >
-              <Text style={styles.registerButtonText}>Register</Text>
+              <Text style={styles.registerButtonText}>REGISTER</Text>
             </TouchableOpacity>
           </View>
-
-          <View style={{ flex: 1, minHeight: 24 }} />
-
-          {/* Footer from ui.js: safe-area aware, sits above the Android nav bar */}
-          <AppFooter variant="onDark" row />
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -300,10 +348,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
 
-  scrollContainer: {
-    flexGrow: 1,
+  inner: {
+    flex: 1,
+  },
+
+  screenBody: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'flex-start',
     backgroundColor: '#FFFFFF',
+    paddingTop: 14,
+    paddingBottom: 18,
   },
 
   purpleBg: {
@@ -316,18 +371,54 @@ const styles = StyleSheet.create({
 
   logoWrap: {
     alignItems: 'center',
-    paddingTop: 72,
-    paddingBottom: 52,
+    paddingTop: 6,
+    paddingBottom: 18,
+  },
+
+  logoWrapCompact: {
+    paddingTop: 4,
+    paddingBottom: 10,
+  },
+
+  millLogo: {
+    width: 245,
+    height: 92,
+    marginBottom: 9,
+  },
+
+  millLogoCompact: {
+    width: 210,
+    height: 76,
+    marginBottom: 5,
+  },
+
+  byText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    fontWeight: '400',
+    color: '#666666',
+    marginVertical: 3,
+    letterSpacing: 0.4,
+  },
+
+  byTextCompact: {
+    fontSize: 12,
+    marginVertical: 3,
+  },
+
+  rasoiLogoWrap: {
+    transform: [{ scale: 0.9 }],
   },
 
   loginCard: {
     width: '88%',
     maxWidth: 340,
+    marginTop: 5,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 24,
+    paddingHorizontal: 22,
+    paddingTop: 17,
+    paddingBottom: 17,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
@@ -335,32 +426,49 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 
+  loginCardCompact: {
+    marginTop: 3,
+    paddingTop: 13,
+    paddingBottom: 13,
+    paddingHorizontal: 18,
+  },
+
   loginTitle: {
-    fontSize: 26,
+    fontSize: 23,
     fontWeight: '400',
     color: '#111111',
     textAlign: 'center',
-    marginBottom: 22,
+    marginBottom: 12,
+  },
+
+  loginTitleCompact: {
+    fontSize: 20,
+    marginBottom: 9,
   },
 
   input: {
-    height: 50,
+    height: 44,
     backgroundColor: '#E9E9E9',
     borderRadius: 8,
     paddingHorizontal: 14,
     fontSize: 14,
     color: '#222222',
-    marginBottom: 14,
+    marginBottom: 10,
+  },
+
+  inputCompact: {
+    height: 40,
+    marginBottom: 8,
   },
 
   passwordContainer: {
-    height: 50,
+    height: 44,
     backgroundColor: '#E9E9E9',
     borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
-    marginBottom: 16,
+    marginBottom: 11,
   },
 
   passwordInput: {
@@ -374,7 +482,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 22,
+    marginBottom: 14,
+  },
+
+  optionsRowCompact: {
+    marginBottom: 10,
   },
 
   checkboxRow: {
@@ -385,35 +497,45 @@ const styles = StyleSheet.create({
 
   checkboxLabel: {
     color: '#333333',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '400',
   },
 
   forgotText: {
     color: '#673B8B',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '400',
   },
 
-  // [MERGE] Developer 2 green applied app-wide. Developer 1 original: '#56327A'.
   loginButton: {
-    height: 50,
+    height: 44,
     backgroundColor: '#7DC24D',
     borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
+  loginButtonCompact: {
+    height: 40,
+  },
+
+  // Updated Login button text
   loginButtonText: {
+    fontSize: 18,
+    fontWeight: '800',
     color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
+    textAlign: 'center',
+    includeFontPadding: false,
   },
 
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 14,
+    marginVertical: 9,
+  },
+
+  dividerRowCompact: {
+    marginVertical: 6,
   },
 
   dividerLine: {
@@ -429,9 +551,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Secondary (biometric) button stays purple-outlined — identical in both devs.
   biometricFullButton: {
-    height: 48,
+    height: 42,
     borderWidth: 1.5,
     borderColor: '#56327A',
     borderRadius: 9,
@@ -442,9 +563,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
+  biometricButtonCompact: {
+    height: 36,
+  },
+
   biometricButtonText: {
     color: '#56327A',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
 
@@ -452,8 +577,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 32,
-    gap: 16,
+    marginTop: 18,
+    gap: 14,
+  },
+
+  registerContainerCompact: {
+    marginTop: 13,
   },
 
   registerText: {
@@ -462,19 +591,21 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // [MERGE] Developer 2 green fill applied. Developer 1 original: transparent + white border.
   registerButton: {
     backgroundColor: '#7DC24D',
     borderWidth: 1,
     borderColor: '#7DC24D',
     borderRadius: 5,
-    paddingHorizontal: 20,
-    paddingVertical: 7,
+    paddingHorizontal: 18,
+    paddingVertical: 6,
   },
 
+  // Updated Register button text
   registerButtonText: {
+    fontSize: 18,
+    fontWeight: '800',
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '500',
+    textAlign: 'center',
+    includeFontPadding: false,
   },
 });

@@ -1,26 +1,3 @@
-// =============================================================================
-//  SplashScreen
-// -----------------------------------------------------------------------------
-//  MERGED (Developer 1 + Developer 2):
-//    Both versions are the SAME screen — white top (logo) + purple bottom
-//    (tagline + loader) + "Powered by EVOLUZN" footer — and share identical
-//    behaviour: 3s timer -> navigation.replace('WelomeScreen'), and the same
-//    logo asset require('../assets/images/capture.png').
-//
-//    • Developer 2 = original, self-contained (raw <Image>, hardcoded hex,
-//      fixed 280x100 logo, absolute-positioned footer text).
-//    • Developer 1 = same screen refactored onto the shared UI kit (BrandLogo,
-//      AppFooter, SafeAreaView, StatusBar, theme tokens).
-//
-//    Developer 1's version is kept because it integrates with the merged
-//    ui.js + theme.js. No Developer-2 behaviour is lost (route name, 3s timer,
-//    logo asset, layout, tagline, loader colour, brand footer all preserved).
-//
-//    LOGO NOTE: require() path + asset are UNCHANGED. On-screen sizing now comes
-//    from BrandLogo's responsive "splash" variant instead of Developer 2's fixed
-//    280x100. To restore the exact original dimensions, replace <BrandLogo .../>
-//    with Developer 2's <Image ... style={styles.logo} /> (styles.logo kept below).
-// =============================================================================
 import React, { useEffect } from 'react';
 import {
   View,
@@ -29,15 +6,19 @@ import {
   ActivityIndicator,
   StyleSheet,
   StatusBar,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AppFooter, BrandLogo } from './ui';
+import { BrandLogo } from './ui';
 import { colors, spacing } from './theme';
 
-const RASOI_LOGO = require('../assets/images/capture.png');
+const SOFTEL_LOGO = require('../assets/images/Softel Millet mill logo 2.png');
+const RASOI_LOGO = require('../assets/images/capture12.png');
 
 const SplashScreen = ({ navigation }) => {
+  const { width } = useWindowDimensions();
+
   useEffect(() => {
     const timer = setTimeout(() => {
       // NOTE: route name kept exactly as the navigator defines it.
@@ -47,24 +28,37 @@ const SplashScreen = ({ navigation }) => {
     return () => clearTimeout(timer);
   }, [navigation]);
 
+  const taglineFontSize = Math.round(Math.min(Math.max(width * 0.085, 24), 36));
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
 
-      {/* White top section — safe area so the logo never hides under the status bar */}
+      {/* White top section — Softel logo above Rasoi Shop logo with "by" in between */}
       <SafeAreaView style={styles.topSection} edges={['top', 'left', 'right']}>
-        <BrandLogo source={RASOI_LOGO} ratio={320 / 86} variant="splash" />
+        <Image
+          source={SOFTEL_LOGO}
+          style={styles.millLogo}
+          resizeMode="contain"
+        />
+        <Text style={styles.byText}>by</Text>
+        <View style={styles.rasoiLogoWrap}>
+          <BrandLogo source={RASOI_LOGO} ratio={320 / 60} variant="splash" />
+        </View>
       </SafeAreaView>
 
       {/* Purple bottom section */}
       <View style={styles.bottomSection}>
         <View style={styles.content}>
-          <Text style={styles.tagline}>Welcome back</Text>
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            style={[styles.tagline, { fontSize: taglineFontSize }]}
+          >
+            Welcome back
+          </Text>
           <ActivityIndicator size="large" color={colors.textOnPrimary} style={styles.loader} />
         </View>
-
-        {/* Branded footer — safe-area aware, sits above the Android nav bar */}
-        <AppFooter variant="onDark" row />
       </View>
     </View>
   );
@@ -80,9 +74,24 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: spacing.xl,
   },
-  // Kept from Developer 2 in case you want the fixed-size <Image> back
-  // (unused while BrandLogo handles sizing).
+  millLogo: {
+    width: 245,
+    height: 92,
+    marginBottom: 10,
+  },
+  byText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    fontWeight: '400',
+    color: '#666666',
+    marginVertical: 3,
+    letterSpacing: 0.4,
+  },
+  rasoiLogoWrap: {
+    transform: [{ scale: 0.9 }],
+  },
   logo: { width: '72%', maxWidth: 300, height: 110 },
 
   bottomSection: {
@@ -91,7 +100,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  content: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  tagline: { fontSize: 15, color: '#E0D6E8', marginTop: spacing.sm },
+  content: {
+    flex: 1,
+    width: '92%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tagline: {
+    fontWeight: '700',
+    color: '#E0D6E8',
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
   loader: { marginTop: spacing.huge },
 });

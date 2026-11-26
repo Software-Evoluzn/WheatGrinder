@@ -990,7 +990,12 @@ const styles = StyleSheet.create({
   btnPrimary: { backgroundColor: '#7DC24D', ...shadows.button },
 
   btnPrimaryDisabled: { backgroundColor: colors.disabledBg, shadowOpacity: 0, elevation: 0 },
-  btnPrimaryText: { ...typography.button, color: colors.textOnPrimary },
+  btnPrimaryText: {
+  ...typography.button,
+  fontSize: 18,
+  fontWeight: '800',
+  color: colors.textOnPrimary,
+},
 
   // Original secondary button colour retained (both developers agree).
   btnSecondary: { backgroundColor: colors.primaryTint, borderWidth: 1, borderColor: colors.primaryTintBorder },
