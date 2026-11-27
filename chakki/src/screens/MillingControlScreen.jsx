@@ -273,6 +273,10 @@ const MillingControlScreen = ({ navigation, route }) => {
     typeof rawTexture === 'string' && rawTexture ? rawTexture.toUpperCase() : 'FINE';
   const textureValue = route?.params?.textureValue;
 
+  // Flow rate is only used for the "others" grain
+  const flowRate = route?.params?.flowRate;
+  const showFlowRate = grainId === 'others' && flowRate != null;
+
   const [processState, setProcessState] = useState(route?.params?.processState ?? null); // null | 'START' | 'PAUSE'
   const [pendingAction, setPendingAction] = useState(null); // null | 'START' | 'PAUSE'
   const [isLoading, setIsLoading] = useState(false);
@@ -395,6 +399,7 @@ const MillingControlScreen = ({ navigation, route }) => {
       grain: grainId,
       grainName: route?.params?.grainName,
       textureValue,
+      flowRate,                       // keep flow rate so it isn't lost
       serialNumber: route?.params?.serialNumber,
       fromMilling: true,
       processState,
@@ -508,29 +513,45 @@ const MillingControlScreen = ({ navigation, route }) => {
           style={{ marginBottom: spacing.xl }}
         />
 
+        {/* Selected settings: grain, texture and (for "others") flow rate */}
         <View style={styles.configRow}>
           <View style={styles.configChip}>
             <Feather name="box" size={14} color={colors.primary} style={{ marginRight: spacing.sm }} />
             <Text style={styles.configText}>{selectedGrain.toUpperCase()}</Text>
           </View>
 
-          <Pressable
-            onPress={handleEditTexture}
-            disabled={textureLocked}
-            accessibilityRole="button"
-            accessibilityLabel={`Current texture: ${selectedTexture}. Tap to change texture`}
-            accessibilityState={{ disabled: textureLocked }}
-            style={({ pressed }) => [
-              styles.changeTextureBtn,
-              pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] },
-              textureLocked && { opacity: 0.5 },
-            ]}
-          >
-            <Feather name="sliders" size={16} color={colors.primary} style={{ marginRight: spacing.sm }} />
-            <Text style={styles.changeTextureText}>CHANGE TEXTURE</Text>
-            <Feather name="chevron-right" size={16} color={colors.primary} style={{ marginLeft: spacing.xs }} />
-          </Pressable>
+          <View style={styles.configChip}>
+            <Feather name="sliders" size={14} color={colors.primary} style={{ marginRight: spacing.sm }} />
+            <Text style={styles.configText}>
+              {selectedTexture}
+              {textureValue != null ? ` (LEVEL ${textureValue})` : ''}
+            </Text>
+          </View>
+
+          {showFlowRate && (
+            <View style={styles.configChip}>
+              <Feather name="activity" size={14} color={colors.primary} style={{ marginRight: spacing.sm }} />
+              <Text style={styles.configText}>FLOW {flowRate}%</Text>
+            </View>
+          )}
         </View>
+
+        <Pressable
+          onPress={handleEditTexture}
+          disabled={textureLocked}
+          accessibilityRole="button"
+          accessibilityLabel={`Current texture: ${selectedTexture}. Tap to change texture`}
+          accessibilityState={{ disabled: textureLocked }}
+          style={({ pressed }) => [
+            styles.changeTextureBtn,
+            pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] },
+            textureLocked && { opacity: 0.5 },
+          ]}
+        >
+          <Feather name="sliders" size={16} color={colors.primary} style={{ marginRight: spacing.sm }} />
+          <Text style={styles.changeTextureText}>CHANGE TEXTURE</Text>
+          <Feather name="chevron-right" size={16} color={colors.primary} style={{ marginLeft: spacing.xs }} />
+        </Pressable>
 
         <Text style={styles.prompt}>
           {isLoading ? 'Waiting for machine response...' : 'Choose an action to control milling'}
@@ -625,7 +646,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: spacing.md,
-    marginBottom: spacing.huge,
+    marginBottom: spacing.lg,
   },
   configChip: {
     flexDirection: 'row',
@@ -647,6 +668,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryTint,
     borderWidth: 1.5,
     borderColor: colors.primary,
+    marginBottom: spacing.huge,
     ...shadows.subtle,
   },
   changeTextureText: {

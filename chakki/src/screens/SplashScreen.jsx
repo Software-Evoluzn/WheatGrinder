@@ -1,72 +1,86 @@
-// =============================================================================
-//  SplashScreen
-// -----------------------------------------------------------------------------
-//  MERGED (Developer 1 + Developer 2):
-//    Both versions are the SAME screen — white top (logo) + purple bottom
-//    (tagline + loader) + "Powered by EVOLUZN" footer — and share identical
-//    behaviour: 3s timer -> navigation.replace('WelomeScreen'), and the same
-//    logo asset require('../assets/images/capture.png').
-//
-//    • Developer 2 = original, self-contained (raw <Image>, hardcoded hex,
-//      fixed 280x100 logo, absolute-positioned footer text).
-//    • Developer 1 = same screen refactored onto the shared UI kit (BrandLogo,
-//      AppFooter, SafeAreaView, StatusBar, theme tokens).
-//
-//    Developer 1's version is kept because it integrates with the merged
-//    ui.js + theme.js. No Developer-2 behaviour is lost (route name, 3s timer,
-//    logo asset, layout, tagline, loader colour, brand footer all preserved).
-//
-//    LOGO NOTE: require() path + asset are UNCHANGED. On-screen sizing now comes
-//    from BrandLogo's responsive "splash" variant instead of Developer 2's fixed
-//    280x100. To restore the exact original dimensions, replace <BrandLogo .../>
-//    with Developer 2's <Image ... style={styles.logo} /> (styles.logo kept below).
-// =============================================================================
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
-  Image,
   Text,
   ActivityIndicator,
   StyleSheet,
   StatusBar,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { AppFooter, BrandLogo } from './ui';
 import { colors, spacing } from './theme';
 
 const RASOI_LOGO = require('../assets/images/capture.png');
+const AUTO_ADVANCE_MS = 3000;
 
 const SplashScreen = ({ navigation }) => {
+  // Prevents double navigation if both timer and tap fire
+  const hasNavigated = useRef(false);
+
+  const goNext = async () => {
+    if (!navigation || hasNavigated.current) return;
+    hasNavigated.current = true;
+
+    try {
+      // Check if auto-login is enabled and customer_id is stored
+      const autoLogin = await AsyncStorage.getItem('auto_login');
+      const customerId = await AsyncStorage.getItem('customer_id');
+
+      if (autoLogin === 'true' && customerId) {
+        // Skip Login screen and go directly to Main
+        navigation.replace('Main', { customer_id: Number(customerId) });
+        return;
+      }
+    } catch (error) {
+      console.log('AUTO LOGIN CHECK ERROR:', error);
+    }
+
+    // Auto-login is off (or an error occurred) -> navigate to Login
+    if (typeof navigation.replace === 'function') {
+      navigation.replace('Login');
+    } else if (typeof navigation.navigate === 'function') {
+      navigation.navigate('Login');
+    }
+  };
+
   useEffect(() => {
     const timer = setTimeout(() => {
-      // NOTE: route name kept exactly as the navigator defines it.
-      navigation.replace('WelomeScreen');
-    }, 3000);
+      goNext();
+    }, AUTO_ADVANCE_MS);
 
     return () => clearTimeout(timer);
-  }, [navigation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
+    <TouchableWithoutFeedback onPress={goNext}>
+      <View style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
 
-      {/* White top section — safe area so the logo never hides under the status bar */}
-      <SafeAreaView style={styles.topSection} edges={['top', 'left', 'right']}>
-        <BrandLogo source={RASOI_LOGO} ratio={320 / 86} variant="splash" />
-      </SafeAreaView>
+        {/* White top section — safe area so the logo never hides under the status bar */}
+        <SafeAreaView style={styles.topSection} edges={['top', 'left', 'right']}>
+          <BrandLogo source={RASOI_LOGO} ratio={320 / 86} variant="splash" />
+        </SafeAreaView>
 
-      {/* Purple bottom section */}
-      <View style={styles.bottomSection}>
-        <View style={styles.content}>
-          <Text style={styles.tagline}>Welcome back</Text>
-          <ActivityIndicator size="large" color={colors.textOnPrimary} style={styles.loader} />
+        {/* Purple bottom section */}
+        <View style={styles.bottomSection}>
+          <View style={styles.content}>
+            <Text style={styles.tagline}>Welcome back</Text>
+            <ActivityIndicator
+              size="large"
+              color={colors.textOnPrimary}
+              style={styles.loader}
+            />
+          </View>
+
+          {/* Branded footer — safe-area aware, sits above the Android nav bar */}
+          <AppFooter variant="onDark" row />
         </View>
-
-        {/* Branded footer — safe-area aware, sits above the Android nav bar */}
-        <AppFooter variant="onDark" row />
       </View>
-    </View>
+    </TouchableWithoutFeedback>
   );
 };
 
@@ -81,8 +95,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // Kept from Developer 2 in case you want the fixed-size <Image> back
-  // (unused while BrandLogo handles sizing).
   logo: { width: '72%', maxWidth: 300, height: 110 },
 
   bottomSection: {

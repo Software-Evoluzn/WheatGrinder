@@ -123,7 +123,7 @@ const SelectGrainScreen = ({ navigation, route }) => {
 
     try {
       setSending(true);
-      navigation.navigate('SelfCleaning', { serialNumber , device: route?.params?.device });
+      navigation.navigate('ReadyToInitiateSelfCleaning', { serialNumber , device: route?.params?.device });
     } catch (e) {
       console.log('Clean stone error:', e);
       setErrorMsg(e?.message || 'Could not find registered machine');

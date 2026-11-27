@@ -20,14 +20,16 @@ import {
   AppDialog,
 } from './ui';
 import { colors, spacing, radii, typography, shadows, layout } from './theme';
-import { fetchRegisteredSerialNumber } from '../services/deviceApi';
+import {
+  fetchRegisteredSerialNumber,
+  sendDeviceCommand,
+} from '../services/deviceApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import DeviceOfflineGuard from '../components/DeviceOfflineGuard';
 
 /* -------------------------------------------------------------------------- */
 /*  HeaderMenu — static overflow (kebab) menu. No API / no dynamic data.       */
-/*    Items are defined locally; "Help" opens a themed dialog with static text. */
 /* -------------------------------------------------------------------------- */
 const HeaderMenu = () => {
   const [open, setOpen] = useState(false);
@@ -54,7 +56,12 @@ const HeaderMenu = () => {
         onRequestClose={() => setOpen(false)}
       >
         <Pressable style={styles.menuOverlay} onPress={() => setOpen(false)}>
-          <View style={[styles.menuCard, { top: insets.top + layout.headerContentHeight + spacing.sm }]}>
+          <View
+            style={[
+              styles.menuCard,
+              { top: insets.top + layout.headerContentHeight + spacing.sm },
+            ]}
+          >
             {items.map((item, i) => (
               <Pressable
                 key={item.label}
@@ -69,7 +76,12 @@ const HeaderMenu = () => {
                   pressed && { backgroundColor: colors.primaryTint },
                 ]}
               >
-                <Feather name={item.icon} size={18} color={colors.primary} style={{ marginRight: spacing.md }} />
+                <Feather
+                  name={item.icon}
+                  size={18}
+                  color={colors.primary}
+                  style={{ marginRight: spacing.md }}
+                />
                 <Text style={styles.menuItemText}>{item.label}</Text>
               </Pressable>
             ))}
@@ -77,7 +89,6 @@ const HeaderMenu = () => {
         </Pressable>
       </Modal>
 
-      {/* Themed help dialog (static content) */}
       <AppDialog
         visible={helpOpen}
         onClose={() => setHelpOpen(false)}
@@ -100,8 +111,18 @@ const ReadyHero = () => {
   useEffect(() => {
     const pulseLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(scaleAnim, { toValue: 1.04, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(scaleAnim, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(scaleAnim, {
+          toValue: 1.04,
+          duration: 1600,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 1600,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
       ])
     );
     pulseLoop.start();
@@ -121,7 +142,7 @@ const ReadyHero = () => {
 
 /* -------------------------------------------------------------------------- */
 /*  ReadyToInitiateSelfCleaning — READY publishes "selfCleaningProcess" via    */
-/*    backend (/api/mqtt/publish → <serial>/control), then navigates.          */
+/*    backend and navigates directly to CleaningProcessScreen.                 */
 /* -------------------------------------------------------------------------- */
 const ReadyToInitiateSelfCleaning = ({ navigation, route }) => {
   const [sending, setSending] = useState(false);
@@ -135,11 +156,12 @@ const ReadyToInitiateSelfCleaning = ({ navigation, route }) => {
     setSending(true);
 
     try {
-      let sn =
-        serialNumber || (await AsyncStorage.getItem('serial_number'));
+      let sn = serialNumber || (await AsyncStorage.getItem('serial_number'));
 
       if (!sn) {
-        const customerId = (await AsyncStorage.getItem('customer_id')) || route?.params?.customerId;
+        const customerId =
+          (await AsyncStorage.getItem('customer_id')) ||
+          route?.params?.customerId;
         if (!customerId) {
           throw new Error('User session not found. Please log in again.');
         }
@@ -152,7 +174,22 @@ const ReadyToInitiateSelfCleaning = ({ navigation, route }) => {
         await AsyncStorage.setItem('serial_number', sn);
       }
 
-      navigation?.navigate?.('SelfCleaning', { serialNumber: sn, device });
+      // Send MQTT command directly from here
+      const response = await sendDeviceCommand(sn, 'selfCleaningProcess');
+      if (response && response.success) {
+        console.log('Command published successfully:', response);
+      } else {
+        console.warn('Failed or non-ok response from API:', response);
+        // Optional: Uncomment the line below if you want to block navigation when API fails
+        // throw new Error(response?.error || 'Failed to send self-cleaning command.');
+      }
+
+      // Navigate directly to CleaningProcessScreen
+      navigation?.navigate?.('CleaningProcessScreen', {
+        serialNumber: sn,
+        device: device,
+        freshStart: true,
+      });
     } catch (e) {
       setErrorMsg(e.message);
     } finally {
@@ -163,7 +200,7 @@ const ReadyToInitiateSelfCleaning = ({ navigation, route }) => {
   return (
     <Screen background={colors.background}>
       <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
-      {/* Header: back + greeting/title (Home style) + static overflow menu. */}
+
       <MainHeader
         greeting="Machine Status"
         title="Self-Cleaning"
@@ -171,29 +208,31 @@ const ReadyToInitiateSelfCleaning = ({ navigation, route }) => {
         right={<HeaderMenu />}
       />
 
-      {/* Hero composition: visual -> title -> description -> status */}
       <View style={styles.content}>
         <ReadyHero />
 
         <Text style={styles.title}>Ready to start Self-Cleaning</Text>
-        <Text style={styles.message}>Press READY to initiate the Self-Cleaning Process.</Text>
+        <Text style={styles.message}>
+          Press READY to initiate the Self-Cleaning Process.
+        </Text>
 
         <View style={styles.statusPill}>
           <View style={styles.dot} />
-          <Text style={styles.statusText}>{sending ? 'Sending command' : 'Ready'}</Text>
+          <Text style={styles.statusText}>
+            {sending ? 'Sending command' : 'Ready'}
+          </Text>
         </View>
       </View>
 
       <BottomActionBar>
         <PrimaryButton
           title={sending ? 'SENDING...' : 'READY'}
-          icon="check"
+          icon={sending ? undefined : 'check'}
           onPress={handleReady}
           disabled={sending}
         />
       </BottomActionBar>
 
-      {/* Error dialog if serial fetch or MQTT publish fails */}
       <AppDialog
         visible={!!errorMsg}
         onClose={() => setErrorMsg('')}
@@ -210,7 +249,6 @@ const ReadyToInitiateSelfCleaning = ({ navigation, route }) => {
 export default ReadyToInitiateSelfCleaning;
 
 const styles = StyleSheet.create({
-  // Overflow menu
   menuOverlay: {
     flex: 1,
     backgroundColor: 'transparent',
@@ -249,7 +287,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xxl,
   },
 
-  // Hero visualization
   hero: {
     width: 168,
     height: 168,

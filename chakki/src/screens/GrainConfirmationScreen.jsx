@@ -79,6 +79,11 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
   // Numeric texture level (e.g. 5)
   const textureLevel = Number(route?.params?.texture ?? grainConfig?.default ?? 5);
   const textureLabel = getTextureLabel(textureLevel, grainConfig);
+  const isTextureCustomized = !!route?.params?.isTextureCustomized;
+
+  // Flow rate (only meaningful for the "others" grain). Set via SetFlowRate screen.
+  const flowRate = route?.params?.flowRate;
+  const showFlowRate = grainId === 'others' && flowRate != null;
 
   const [selectedOption, setSelectedOption] = useState(null);
   const [sending, setSending] = useState(false);
@@ -113,6 +118,7 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
         grainName,                   // display name
         texture: textureLabel,       // label string: 'FINE' | 'MEDIUM' | 'COARSE'
         textureValue: textureLevel,  // numeric level
+        flowRate,                    // numeric flow rate (only set for "others")
         serialNumber: serial,
         processState: 'START',       // machine is already running
       });
@@ -132,8 +138,9 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
       grainId,
       grainName,
       textureValue: textureLevel,
+      flowRate,                      // keep flow rate so it isn't lost
       serialNumber,
-      fromMilling:false,
+      fromMilling: false,
     });
   };
 
@@ -146,9 +153,18 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
       grain: grainId,
       grainId,
       grainName,
+      textureValue: textureLevel,    // keep texture so it isn't lost
+      isTextureCustomized,
+      flowRate,                      // current flow rate (if already set)
       serialNumber,
+      fromMilling: false,
     });
   };
+
+  const pillText = sending
+    ? 'COMMUNICATING...'
+    : `${isTextureCustomized ? 'Selected Texture' : 'Default Texture'}  •  ${textureLabel} (Level ${textureLevel})` +
+      (showFlowRate ? `  •  Flow ${flowRate}%` : '');
 
   return (
     <Screen background={colors.background}>
@@ -169,14 +185,11 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
           </View>
         </View>
 
-       <View style={styles.texturePill}>
+        <View style={styles.texturePill}>
           <View style={[styles.dot, sending && styles.dotActive]} />
-          <Text style={styles.textureText}>
-            {sending
-              ? 'COMMUNICATING...'
-              : `${route?.params?.isTextureCustomized ? 'Selected Texture' : 'Default Texture'}  •  ${textureLabel} (Level ${textureLevel})`}
-          </Text>
+          <Text style={styles.textureText}>{pillText}</Text>
         </View>
+
         <View style={styles.promptContainer}>
           <Text style={styles.question}>Ready to Grind?</Text>
           <Text style={styles.subQuestion}>
@@ -201,14 +214,16 @@ const GrainConfirmationScreen = ({ navigation, route }) => {
             subtitle="Adjust coarseness"
             disabled={sending}
           />
-          <ActionCard
-            selected={selectedOption === 'flowRate'}
-            onPress={handleSetFlowRate}
-            icon="activity"
-            label="FLOW RATE"
-            subtitle="Adjust grain flow"
-            disabled={sending}
-          />
+          {grainId === 'others' && (
+            <ActionCard
+              selected={selectedOption === 'flowRate'}
+              onPress={handleSetFlowRate}
+              icon="activity"
+              label="FLOW RATE"
+              subtitle="Adjust grain flow"
+              disabled={sending}
+            />
+          )}
         </View>
 
         <Text style={styles.helperText}>Use back arrow to change selected grain</Text>
