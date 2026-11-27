@@ -11,6 +11,7 @@ import {
   Alert,
   StatusBar,
   useWindowDimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
@@ -20,12 +21,16 @@ import {
   registerUser,
   registerBiometricOnServer,
 } from '../services/AuthService';
-import { AppFooter, BrandLogo } from './ui';
+import { BrandLogo } from './ui';
+
+const SOFTEL_LOGO = require('../assets/images/Softel Millet mill logo 2.png');
+const RASOI_LOGO = require('../assets/images/capture12.png');
 
 const rnBiometrics = new ReactNativeBiometrics();
 
 const RegisterScreen = ({ navigation }) => {
   const { height: screenH } = useWindowDimensions();
+  const isCompact = screenH < 760;
 
   // Where the purple area starts (follows the card so the card straddles white/purple)
   const [purpleTop, setPurpleTop] = useState(Math.round(screenH * 0.55));
@@ -199,13 +204,21 @@ const RegisterScreen = ({ navigation }) => {
           {/* Purple area behind the lower part of the card */}
           <View style={[styles.purpleBg, { top: purpleTop }]} />
 
-          {/* Logo */}
-          <View style={styles.logoWrap}>
-            <BrandLogo
-              source={require('../assets/images/capture.png')}
-              ratio={320 / 86}
-              variant="header"
+          {/* Softel logo above Rasoi Shop logo with "by" in between */}
+          <View style={[styles.logoWrap, isCompact && styles.logoWrapCompact]}>
+            <Image
+              source={SOFTEL_LOGO}
+              style={[styles.millLogo, isCompact && styles.millLogoCompact]}
+              resizeMode="contain"
             />
+            <Text style={[styles.byText, isCompact && styles.byTextCompact]}>by</Text>
+            <View style={styles.rasoiLogoWrap}>
+              <BrandLogo
+                source={RASOI_LOGO}
+                ratio={320 / 60}
+                variant="header"
+              />
+            </View>
           </View>
 
           {/* Sign Up card */}
@@ -334,11 +347,6 @@ const RegisterScreen = ({ navigation }) => {
               <Text style={styles.loginLinkButtonText}>Login</Text>
             </TouchableOpacity>
           </View>
-
-          {/* Footer */}
-          <View style={styles.footerWrap}>
-            <AppFooter variant="onDark" row />
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -370,8 +378,43 @@ const styles = StyleSheet.create({
 
   logoWrap: {
     alignItems: 'center',
-    paddingTop: 32,
-    paddingBottom: 24,
+    paddingTop: 12,
+    paddingBottom: 20,
+  },
+
+  logoWrapCompact: {
+    paddingTop: 8,
+    paddingBottom: 14,
+  },
+
+  millLogo: {
+    width: 245,
+    height: 92,
+    marginBottom: 10,
+  },
+
+  millLogoCompact: {
+    width: 210,
+    height: 76,
+    marginBottom: 6,
+  },
+
+  byText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    fontWeight: '400',
+    color: '#666666',
+    marginVertical: 3,
+    letterSpacing: 0.4,
+  },
+
+  byTextCompact: {
+    fontSize: 12,
+    marginVertical: 3,
+  },
+
+  rasoiLogoWrap: {
+    transform: [{ scale: 0.9 }],
   },
 
   registerCard: {
@@ -454,8 +497,8 @@ const styles = StyleSheet.create({
 
   signupButtonText: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '800',
   },
 
   loginLinkContainer: {
@@ -483,13 +526,7 @@ const styles = StyleSheet.create({
 
   loginLinkButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-
-  footerWrap: {
-    marginTop: 28,
-    width: '100%',
-    alignItems: 'center',
+    fontSize: 18,
+    fontWeight: '800',
   },
 });

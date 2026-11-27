@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef } from 'react';
 import {
   View,
@@ -13,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { AppFooter, BrandLogo } from './ui';
+import { BrandLogo } from './ui';
 import { colors, spacing } from './theme';
 
 const RASOI_LOGO = require('../assets/images/capture.png');
@@ -113,9 +112,6 @@ const WelcomeScreen = ({ navigation }) => {
               <Text style={styles.welcomeText}>Welcome Annapurna !</Text>
               <View style={styles.accentDivider} />
             </View>
-
-            {/* Branded footer — safe-area aware, sits above the Android nav bar */}
-            <AppFooter variant="onDark" row />
           </Animated.View>
         </View>
       </View>
@@ -174,13 +170,13 @@ const styles = StyleSheet.create({
   // (Unused while BrandLogo handles sizing; kept for the raw-<Image> fallback.)
   rasoiLogo: { width: '60%', height: '74%' },
 
-  /* BOTTOM CONTENT & FOOTER */
+  /* BOTTOM CONTENT */
   bottomContent: {
     flex: 1,
     width: '100%',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 78,
+    justifyContent: 'center',
+    paddingTop: 56,
   },
   welcomeWrapper: { alignItems: 'center' },
   welcomeText: {

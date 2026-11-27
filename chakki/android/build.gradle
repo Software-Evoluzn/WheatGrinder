@@ -15,7 +15,17 @@ buildscript {
         classpath("com.android.tools.build:gradle")
         classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
-      
+    }
+}
+
+allprojects {
+    subprojects { subproject ->
+        afterEvaluate {
+            def androidExt = subproject.extensions.findByName("android")
+            if (androidExt != null && androidExt.compileSdk == null) {
+                androidExt.compileSdk = rootProject.ext.compileSdkVersion
+            }
+        }
     }
 }
 
