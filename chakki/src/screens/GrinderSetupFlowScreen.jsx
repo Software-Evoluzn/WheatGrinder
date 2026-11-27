@@ -15,10 +15,7 @@ import {
 } from './ui';
 import { colors, spacing, typography, radii, shadows, layout } from './theme';
 
-/* -------------------------------------------------------------------------- */
-/*  HeaderMenu — static overflow (kebab) menu. No API / no dynamic data.       */
-/*    Items are defined locally; "Help" opens a themed dialog with static text. */
-/* -------------------------------------------------------------------------- */
+
 const HeaderMenu = () => {
   const [open, setOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -84,8 +81,6 @@ const HeaderMenu = () => {
 /*  SetupHero — layered visualization, matching CleaningHero's composition    */
 /* -------------------------------------------------------------------------- */
 const HERO = 260;
-const center = (size) => (HERO - size) / 2;
-
 const SetupHero = () => {
   const pulse = useRef(new Animated.Value(0)).current;
 
@@ -150,7 +145,6 @@ const GrinderSetupFlowScreen = ({ navigation }) => {
     </Screen>
   );
 };
-
 export default GrinderSetupFlowScreen;
 
 const styles = StyleSheet.create({
@@ -185,15 +179,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.textPrimary,
   },
-
   content: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xxl,
   },
-
-  // Hero visualization
   hero: {
     width: HERO,
     height: HERO,

@@ -58,7 +58,7 @@ const HeaderMenu = () => {
         onClose={() => setHelpOpen(false)}
         icon="help-circle"
         title="Help"
-        message="Tap START to load the grain and begin milling. Tap PAUSE to hold the process. Tap the texture chip to change the grind texture. Use the back arrow to return."
+        message="Tap START to load the grain and begin milling. Tap PAUSE to hold the process. Tap CHANGE TEXTURE to change the grind texture. Use the back arrow to return."
         confirmLabel="Got it"
         onConfirm={() => setHelpOpen(false)}
       />
@@ -273,6 +273,10 @@ const MillingControlScreen = ({ navigation, route }) => {
     typeof rawTexture === 'string' && rawTexture ? rawTexture.toUpperCase() : 'FINE';
   const textureValue = route?.params?.textureValue;
 
+  // Flow rate is only used for the "others" grain
+  const flowRate = route?.params?.flowRate;
+  const showFlowRate = grainId === 'others' && flowRate != null;
+
   const [processState, setProcessState] = useState(route?.params?.processState ?? null); // null | 'START' | 'PAUSE'
   const [pendingAction, setPendingAction] = useState(null); // null | 'START' | 'PAUSE'
   const [isLoading, setIsLoading] = useState(false);
@@ -395,6 +399,7 @@ const MillingControlScreen = ({ navigation, route }) => {
       grain: grainId,
       grainName: route?.params?.grainName,
       textureValue,
+      flowRate,                       // keep flow rate so it isn't lost
       serialNumber: route?.params?.serialNumber,
       fromMilling: true,
       processState,
@@ -505,13 +510,27 @@ const MillingControlScreen = ({ navigation, route }) => {
           label={statusLabel}
           variant={processState === 'PAUSE' ? 'warning' : 'info'}
           icon={processState === 'PAUSE' ? 'pause' : 'zap'}
-          style={{ marginBottom: spacing.xl }}
+          style={{ marginBottom: spacing.xxl }}
         />
 
-        <View style={styles.configRow}>
+        {/* 1. Texture level chip on top (slightly larger) */}
+        <View style={styles.topTextureWrapper}>
+          <View style={styles.textureChip}>
+            <Feather name="sliders" size={16} color={colors.primary} style={{ marginRight: spacing.sm }} />
+            <Text style={styles.textureChipText}>
+              {selectedTexture}
+              {textureValue != null ? ` (LEVEL ${textureValue})` : ''}
+            </Text>
+          </View>
+        </View>
+
+        {/* 2. Grain chip on left, Change Texture button on right */}
+        <View style={styles.actionRow}>
           <View style={styles.configChip}>
-            <Feather name="box" size={14} color={colors.primary} style={{ marginRight: spacing.sm }} />
-            <Text style={styles.configText}>{selectedGrain.toUpperCase()}</Text>
+            <Feather name="box" size={15} color={colors.primary} style={{ marginRight: spacing.xs }} />
+            <Text style={styles.configText} numberOfLines={1}>
+              {selectedGrain.toUpperCase()}
+            </Text>
           </View>
 
           <Pressable
@@ -522,20 +541,33 @@ const MillingControlScreen = ({ navigation, route }) => {
             accessibilityState={{ disabled: textureLocked }}
             style={({ pressed }) => [
               styles.changeTextureBtn,
-              pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] },
+              pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
               textureLocked && { opacity: 0.5 },
             ]}
           >
-            <Feather name="sliders" size={16} color={colors.primary} style={{ marginRight: spacing.sm }} />
-            <Text style={styles.changeTextureText}>CHANGE TEXTURE</Text>
-            <Feather name="chevron-right" size={16} color={colors.primary} style={{ marginLeft: spacing.xs }} />
+            <Feather name="sliders" size={16} color="#FFFFFF" style={{ marginRight: spacing.xs }} />
+            <Text style={styles.changeTextureText} numberOfLines={1}>
+              CHANGE TEXTURE
+            </Text>
+            <Feather name="chevron-right" size={16} color="#FFFFFF" style={{ marginLeft: 2 }} />
           </Pressable>
         </View>
 
+        {showFlowRate && (
+          <View style={styles.flowRow}>
+            <View style={styles.configChip}>
+              <Feather name="activity" size={14} color={colors.primary} style={{ marginRight: spacing.sm }} />
+              <Text style={styles.configText}>FLOW {flowRate}%</Text>
+            </View>
+          </View>
+        )}
+
+        {/* 3. Prompt text */}
         <Text style={styles.prompt}>
           {isLoading ? 'Waiting for machine response...' : 'Choose an action to control milling'}
         </Text>
 
+        {/* 4. Start and Pause buttons */}
         <View style={styles.controlsRow}>
           <ControlButton
             variant="start"
@@ -617,45 +649,84 @@ const styles = StyleSheet.create({
   menuItemBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.divider },
   menuItemText: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
 
-  body: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xxl },
+  body: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xxl,
+    paddingHorizontal: spacing.md,
+  },
 
-  configRow: {
+  topTextureWrapper: {
+    alignItems: 'center',
+    marginBottom: spacing.xxl,
+  },
+  textureChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primaryTint,
+    borderWidth: 1.5,
+    borderColor: colors.primaryTintBorder,
+    ...shadows.subtle,
+  },
+  textureChipText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: 0.6,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.huge,
+    width: '100%',
+    gap: spacing.sm,
+    marginBottom: spacing.xxl,
+  },
+  flowRow: {
+    alignItems: 'center',
+    marginTop: -spacing.md,
+    marginBottom: spacing.xl,
   },
   configChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 1,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     borderRadius: radii.pill,
     backgroundColor: colors.primaryTint,
     borderWidth: 1,
     borderColor: colors.primaryTintBorder,
   },
-  configText: { fontSize: 13, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 },
+  configText: { fontSize: 13, fontWeight: '800', color: colors.primary, letterSpacing: 0.4 },
   changeTextureBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
+    flexShrink: 0,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     borderRadius: radii.pill,
-    backgroundColor: colors.primaryTint,
+    backgroundColor: '#16A34A',
     borderWidth: 1.5,
-    borderColor: colors.primary,
+    borderColor: '#15803D',
     ...shadows.subtle,
   },
   changeTextureText: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '800',
-    color: colors.primary,
-    letterSpacing: 0.6,
+    color: '#FFFFFF',
+    letterSpacing: 0.4,
   },
-  prompt: { ...typography.subtitle, color: colors.textSecondary, marginBottom: spacing.huge, textAlign: 'center' },
+  prompt: {
+    ...typography.subtitle,
+    color: colors.textSecondary,
+    marginBottom: spacing.xxl,
+    textAlign: 'center',
+  },
   controlsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 44 },
   controlItem: { alignItems: 'center' },
   circleWrapper: {

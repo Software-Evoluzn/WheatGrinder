@@ -92,7 +92,7 @@ const SetFlowRate = ({ navigation, route }) => {
   const minLimit = grainConfig?.minFlowRate ?? 10;
   const maxLimit = grainConfig?.maxFlowRate ?? 100;
   const defaultRate = grainConfig?.defaultFlowRate ?? 50;
-
+  const isTextureCustomized = route?.params?.isTextureCustomized;   // NEW
   const initialRate = Number(route?.params?.flowRate ?? defaultRate);
   const [flowRate, setFlowRate] = useState(
     Math.min(maxLimit, Math.max(minLimit, initialRate))
@@ -129,22 +129,31 @@ const SetFlowRate = ({ navigation, route }) => {
       }
 
       if (fromMilling) {
-        navigation.navigate('MillingControlScreen', {
-          grain: grainId,
-          grainName: selectedGrain,
-          texture: selectedTexture,
-          textureValue,
-          flowRate,
-          serialNumber: serial,
-          processState,
+        navigation.navigate({
+          name: 'MillingControlScreen',
+          params: {
+            grain: grainId,
+            grainName: selectedGrain,
+            texture: selectedTexture,
+            textureValue,
+            flowRate,
+            serialNumber: serial,
+            processState,
+          },
+          merge: true,                                  // NEW
         });
       } else {
-        navigation.navigate('GrainConfirmationScreen', {
-          grain: grainId,
-          grainName: selectedGrain,
-          texture: textureValue,
-          flowRate,
-          serialNumber: serial,
+        navigation.navigate({
+          name: 'GrainConfirmationScreen',
+          params: {
+            grain: grainId,
+            grainName: selectedGrain,
+            texture: textureValue,
+            flowRate,
+            serialNumber: serial,
+            isTextureCustomized,                        // NEW: "Selected Texture" label sahi dikhega
+          },
+          merge: true,                                  // NEW
         });
       }
     } catch (e) {

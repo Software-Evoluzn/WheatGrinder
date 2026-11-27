@@ -166,6 +166,7 @@ const SetGrindTexture = ({ navigation, route }) => {
             grainName: grainDisplayName,
             texture: getTextureLabel(),
             textureValue: textureLevel,
+            flowRate: route?.params?.flowRate,
             serialNumber,
             processState: route?.params?.processState,
           },
@@ -179,6 +180,7 @@ const SetGrindTexture = ({ navigation, route }) => {
             grain: grainId,
             grainName: grainDisplayName,
             texture: textureLevel, // GrainConfirmationScreen numeric level expect karta hai
+            flowRate: route?.params?.flowRate,
             serialNumber,
             isTextureCustomized: true,
           },
