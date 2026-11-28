@@ -1,9 +1,20 @@
+
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Animated, Easing, Modal, Pressable, BackHandler } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  Easing,
+  Modal,
+  Pressable,
+  BackHandler,
+} from 'react-native';
+
 import Feather from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import io from 'socket.io-client';
-import IP_CONFIG from '../services/ip.json'; // Socket IP config
+import IP_CONFIG from '../services/ip.json';
 import DeviceOfflineGuard from '../components/DeviceOfflineGuard';
 
 import {
@@ -12,26 +23,38 @@ import {
   IconButton,
   Eyebrow,
   ProgressBar,
-  StatusBadge,
   AppDialog,
+  BottomActionBar,
 } from './ui';
-import { colors, spacing, typography, radii, shadows, layout } from './theme';
+
+import {
+  colors,
+  spacing,
+  typography,
+  radii,
+  shadows,
+  layout,
+} from './theme';
 
 const BRAND_GREEN = '#7DC24d';
 const SOCKET_URL = IP_CONFIG.BASE_URL;
-const DONE_HOLD_MS = 2500;
 const NEXT_ROUTE = 'SelectGrain';
 
 /* -------------------------------------------------------------------------- */
-/*  HeaderMenu                                                                */
+/* HeaderMenu                                                                 */
 /* -------------------------------------------------------------------------- */
+
 const HeaderMenu = () => {
   const [open, setOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const insets = useSafeAreaInsets();
 
   const items = [
-    { icon: 'help-circle', label: 'Help', onPress: () => setHelpOpen(true) },
+    {
+      icon: 'help-circle',
+      label: 'Help',
+      onPress: () => setHelpOpen(true),
+    },
   ];
 
   return (
@@ -49,8 +72,21 @@ const HeaderMenu = () => {
         animationType="fade"
         onRequestClose={() => setOpen(false)}
       >
-        <Pressable style={styles.menuOverlay} onPress={() => setOpen(false)}>
-          <View style={[styles.menuCard, { top: insets.top + layout.headerContentHeight + spacing.sm }]}>
+        <Pressable
+          style={styles.menuOverlay}
+          onPress={() => setOpen(false)}
+        >
+          <View
+            style={[
+              styles.menuCard,
+              {
+                top:
+                  insets.top +
+                  layout.headerContentHeight +
+                  spacing.sm,
+              },
+            ]}
+          >
             {items.map((item, i) => (
               <Pressable
                 key={item.label}
@@ -62,11 +98,21 @@ const HeaderMenu = () => {
                 style={({ pressed }) => [
                   styles.menuItem,
                   i > 0 && styles.menuItemBorder,
-                  pressed && { backgroundColor: colors.primaryTint },
+                  pressed && {
+                    backgroundColor: colors.primaryTint,
+                  },
                 ]}
               >
-                <Feather name={item.icon} size={18} color={colors.primary} style={{ marginRight: spacing.md }} />
-                <Text style={styles.menuItemText}>{item.label}</Text>
+                <Feather
+                  name={item.icon}
+                  size={18}
+                  color={colors.primary}
+                  style={{ marginRight: spacing.md }}
+                />
+
+                <Text style={styles.menuItemText}>
+                  {item.label}
+                </Text>
               </Pressable>
             ))}
           </View>
@@ -87,8 +133,9 @@ const HeaderMenu = () => {
 };
 
 /* -------------------------------------------------------------------------- */
-/*  ProcessHero                                                               */
+/* ProcessHero                                                                */
 /* -------------------------------------------------------------------------- */
+
 const HERO = 260;
 const center = (size) => (HERO - size) / 2;
 
@@ -99,105 +146,225 @@ const ProcessHero = () => {
   useEffect(() => {
     const pulseLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 1600,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 1600,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
       ])
     );
+
     const spinLoop = Animated.loop(
-      Animated.timing(spin, { toValue: 1, duration: 1400, easing: Easing.linear, useNativeDriver: true })
+      Animated.timing(spin, {
+        toValue: 1,
+        duration: 1400,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
     );
+
     pulseLoop.start();
     spinLoop.start();
+
     return () => {
       pulseLoop.stop();
       spinLoop.stop();
     };
   }, [pulse, spin]);
 
-  const glowScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.08] });
-  const glowOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.55] });
-  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const glowScale = pulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.9, 1.08],
+  });
+
+  const glowOpacity = pulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.55],
+  });
+
+  const rotate = spin.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
   return (
     <View style={styles.hero}>
-      <Animated.View style={[styles.glow, { transform: [{ scale: glowScale }], opacity: glowOpacity }]} />
+      <Animated.View
+        style={[
+          styles.glow,
+          {
+            transform: [{ scale: glowScale }],
+            opacity: glowOpacity,
+          },
+        ]}
+      />
+
       <View style={styles.ringStatic} />
-      <Animated.View style={[styles.ringArc, { transform: [{ rotate }] }]} />
+
+      <Animated.View
+        style={[
+          styles.ringArc,
+          {
+            transform: [{ rotate }],
+          },
+        ]}
+      />
+
       <View style={styles.disc}>
-        <Feather name="loader" size={48} color={colors.primary} />
+        <Feather
+          name="loader"
+          size={48}
+          color={colors.primary}
+        />
       </View>
     </View>
   );
 };
 
 /* -------------------------------------------------------------------------- */
-/*  DoneHero                                                                  */
+/* DoneHero                                                                   */
 /* -------------------------------------------------------------------------- */
+
 const DoneHero = ({ checkScale }) => (
   <View style={styles.hero}>
-    <View style={[styles.glow, { backgroundColor: colors.successTint || colors.primaryTint, opacity: 0.5 }]} />
-    <View style={[styles.ringStatic, { borderColor: colors.successSubtle || colors.primarySubtle }]} />
-    <View style={[styles.ringArc, { borderColor: colors.successTintBorder || colors.primaryTintBorder }]} />
-    <Animated.View style={[styles.checkCircle, { transform: [{ scale: checkScale }] }]}>
-      <Feather name="check" size={32} color={colors.textOnPrimary} />
+    <View
+      style={[
+        styles.glow,
+        {
+          backgroundColor:
+            colors.successTint || colors.primaryTint,
+          opacity: 0.5,
+        },
+      ]}
+    />
+
+    <View
+      style={[
+        styles.ringStatic,
+        {
+          borderColor:
+            colors.successSubtle || colors.primarySubtle,
+        },
+      ]}
+    />
+
+    <View
+      style={[
+        styles.ringArc,
+        {
+          borderColor:
+            colors.successTintBorder ||
+            colors.primaryTintBorder,
+        },
+      ]}
+    />
+
+    <Animated.View
+      style={[
+        styles.checkCircle,
+        {
+          transform: [{ scale: checkScale }],
+        },
+      ]}
+    >
+      <Feather
+        name="check"
+        size={32}
+        color={colors.textOnPrimary}
+      />
     </Animated.View>
   </View>
 );
 
 /* -------------------------------------------------------------------------- */
-/*  Main Screen Component                                                     */
+/* Main Screen Component                                                      */
 /* -------------------------------------------------------------------------- */
+
 const CleaningProcessScreen = ({ navigation, route }) => {
-  const { serialNumber, device, freshStart } = route.params || {};
+  const { serialNumber, device, freshStart } =
+    route.params || {};
+
   const startSentRef = useRef(false);
 
-  const [phase, setPhase] = useState('progress'); // 'progress' | 'done'
+  const [phase, setPhase] = useState('progress');
   const [progress, setProgress] = useState(0);
-  const checkScale = useRef(new Animated.Value(0)).current;
 
-  // Back warning dialog & forward-navigation permission ref
-  const [backWarningOpen, setBackWarningOpen] = useState(false);
+  const checkScale = useRef(
+    new Animated.Value(0)
+  ).current;
+
+  const [backWarningOpen, setBackWarningOpen] =
+    useState(false);
+
   const allowNavigationRef = useRef(false);
 
-  // Prevent user back navigation, but allow explicit RESET / NAVIGATE (e.g., from DeviceOfflineGuard "Back to Home")
+  /* ------------------------------------------------------------------------ */
+  /* Existing Back Navigation Protection                                      */
+  /* ------------------------------------------------------------------------ */
+
   useEffect(() => {
     navigation?.setOptions?.({
       gestureEnabled: false,
       headerLeft: () => null,
     });
 
-    const unsubscribe = navigation?.addListener?.('beforeRemove', (e) => {
-      if (allowNavigationRef.current) {
-        return;
+    const unsubscribe = navigation?.addListener?.(
+      'beforeRemove',
+      (e) => {
+        if (allowNavigationRef.current) {
+          return;
+        }
+
+        const actionType = e?.data?.action?.type;
+
+        if (
+          actionType === 'RESET' ||
+          actionType === 'NAVIGATE' ||
+          actionType === 'REPLACE'
+        ) {
+          allowNavigationRef.current = true;
+          setBackWarningOpen(false);
+          return;
+        }
+
+        e.preventDefault();
+        setBackWarningOpen(true);
       }
+    );
 
-      const actionType = e?.data?.action?.type;
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        if (allowNavigationRef.current) {
+          return false;
+        }
 
-      if (actionType === 'RESET' || actionType === 'NAVIGATE' || actionType === 'REPLACE') {
-        allowNavigationRef.current = true;
-        setBackWarningOpen(false);
-        return;
+        setBackWarningOpen(true);
+        return true;
       }
-
-      e.preventDefault();
-      setBackWarningOpen(true);
-    });
-
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (allowNavigationRef.current) {
-        return false;
-      }
-      setBackWarningOpen(true);
-      return true;
-    });
+    );
 
     return () => {
-      if (typeof unsubscribe === 'function') unsubscribe();
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+
       backHandler.remove();
     };
   }, [navigation]);
 
-  // Real-time Socket Listener for Direct MQTT Status & Progress
+  /* ------------------------------------------------------------------------ */
+  /* Existing Real-time Socket Listener                                       */
+  /* ------------------------------------------------------------------------ */
+
   useEffect(() => {
     const socket = io(SOCKET_URL, {
       transports: ['websocket'],
@@ -211,9 +378,15 @@ const CleaningProcessScreen = ({ navigation, route }) => {
         .toLowerCase();
 
     const handleCleaningUpdate = (data) => {
-      console.log('⚡ Cleaning status received:', data);
+      console.log(
+        '⚡ Cleaning status received:',
+        data
+      );
 
-      const incomingId = normalizeSerial(data?.serial_number);
+      const incomingId = normalizeSerial(
+        data?.serial_number
+      );
+
       const currentId = normalizeSerial(serialNumber);
 
       // Check if message belongs to current device
@@ -225,48 +398,78 @@ const CleaningProcessScreen = ({ navigation, route }) => {
 
       if (!isSameDevice) return;
 
-      // 1. Live Percentage Update (e.g., 10%, 20%, ..., 100%)
-      if (data?.status === 'cleaning_progress' && typeof data?.progress === 'number') {
-        const pct = Math.max(0, Math.min(100, data.progress));
+      // Live percentage update
+      if (
+        data?.status === 'cleaning_progress' &&
+        typeof data?.progress === 'number'
+      ) {
+        const pct = Math.max(
+          0,
+          Math.min(100, data.progress)
+        );
+
         setProgress(pct);
       }
 
-      // 2. Final Cleaning Done Message
+      // Final cleaning done message
       if (data?.status === 'cleaning_done') {
         console.log('✅ SELF CLEANING DONE');
+
         setProgress(100);
         setPhase('done');
       }
     };
 
     socket.on('connect', () => {
-      console.log('⚡ Socket connected:', socket.id);
+      console.log(
+        '⚡ Socket connected:',
+        socket.id
+      );
 
       if (serialNumber) {
-        // Nayi cleaning: pehle purana done/progress backend se hatao
+        // Clear old cleaning status for a fresh start
         if (freshStart && !startSentRef.current) {
           startSentRef.current = true;
-          socket.emit('start_cleaning', { serial_number: serialNumber });
+
+          socket.emit('start_cleaning', {
+            serial_number: serialNumber,
+          });
         }
 
-        socket.emit('check_cleaning', { serial_number: serialNumber });
+        socket.emit('check_cleaning', {
+          serial_number: serialNumber,
+        });
       }
     });
 
-    socket.on('cleaning_status_update', handleCleaningUpdate);
+    socket.on(
+      'cleaning_status_update',
+      handleCleaningUpdate
+    );
 
     socket.on('connect_error', (error) => {
-      console.log('❌ Socket connection error:', error.message);
+      console.log(
+        '❌ Socket connection error:',
+        error.message
+      );
     });
 
     return () => {
       console.log('🔌 Cleaning socket disconnected');
-      socket.off('cleaning_status_update', handleCleaningUpdate);
+
+      socket.off(
+        'cleaning_status_update',
+        handleCleaningUpdate
+      );
+
       socket.disconnect();
     };
   }, [serialNumber]);
 
-  // Handle Done animation & Auto-navigation
+  /* ------------------------------------------------------------------------ */
+  /* Done Animation — No Automatic Navigation                                 */
+  /* ------------------------------------------------------------------------ */
+
   useEffect(() => {
     if (phase !== 'done') return undefined;
 
@@ -276,41 +479,125 @@ const CleaningProcessScreen = ({ navigation, route }) => {
       tension: 80,
       useNativeDriver: true,
     }).start();
+  }, [phase, checkScale]);
 
-    const advance = setTimeout(() => {
-      allowNavigationRef.current = true;
-      setBackWarningOpen(false);
+  /* ------------------------------------------------------------------------ */
+  /* Manual NEXT Button Navigation                                            */
+  /* ------------------------------------------------------------------------ */
 
-      const targetParams = { serialNumber, device };
-      if (navigation?.replace) {
-        navigation.replace(NEXT_ROUTE, targetParams);
-      } else if (navigation?.navigate) {
-        navigation.navigate(NEXT_ROUTE, targetParams);
-      }
-    }, DONE_HOLD_MS);
+  const handleNext = () => {
+    if (
+      phase !== 'done' ||
+      allowNavigationRef.current
+    ) {
+      return;
+    }
 
-    return () => clearTimeout(advance);
-  }, [phase, checkScale, navigation, serialNumber, device]);
+    allowNavigationRef.current = true;
 
-  // Done View
+    setBackWarningOpen(false);
+
+    const targetParams = {
+      serialNumber,
+      device,
+    };
+
+    if (navigation?.replace) {
+      navigation.replace(
+        NEXT_ROUTE,
+        targetParams
+      );
+    } else if (navigation?.navigate) {
+      navigation.navigate(
+        NEXT_ROUTE,
+        targetParams
+      );
+    }
+  };
+
+  /* ------------------------------------------------------------------------ */
+  /* DONE VIEW                                                                */
+  /* ------------------------------------------------------------------------ */
+
   if (phase === 'done') {
     return (
-      <Screen background={colors.background} edges={['top', 'left', 'right', 'bottom']}>
-        <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
-        <MainHeader greeting="Machine Status" title="CLEANING PROCESS" onBack={undefined} right={<HeaderMenu />} />
+      <Screen
+        background={colors.background}
+        edges={['top', 'left', 'right', 'bottom']}
+      >
+        <DeviceOfflineGuard
+          navigation={navigation}
+          serialNumber={serialNumber}
+        />
+
+        <MainHeader
+          greeting="Machine Status"
+          title="CLEANING PROCESS"
+          onBack={undefined}
+          right={<HeaderMenu />}
+        />
 
         <View style={styles.centerContent}>
           <DoneHero checkScale={checkScale} />
-          <Text style={styles.title}>Self Cleaning is done</Text>
-          <Text style={styles.message}>Please discard the contents from the collection bowl.</Text>
+
+          <Text style={styles.title}>
+            Self Cleaning is done
+          </Text>
+
+          {/* Highlighted Orange Discard Alert */}
+
+          <View style={styles.discardNotice}>
+            <Feather
+              name="alert-circle"
+              size={26}
+              color="#B45309"
+              style={styles.discardIcon}
+            />
+
+            <Text style={styles.discardText}>
+              Please discard the contents from the
+              collection bowl.
+            </Text>
+          </View>
         </View>
+
+        {/* Green NEXT Button */}
+
+        <BottomActionBar
+          lift={0}
+          divider={false}
+          style={styles.doneBottomBar}
+        >
+          <Pressable
+            onPress={handleNext}
+            accessibilityRole="button"
+            accessibilityLabel="Next, select grain"
+            style={({ pressed }) => [
+              styles.nextButton,
+              pressed && styles.nextButtonPressed,
+            ]}
+          >
+            <Text style={styles.nextButtonText}>
+              NEXT
+            </Text>
+
+            <Feather
+              name="arrow-right"
+              size={22}
+              color="#FFFFFF"
+              style={styles.nextButtonIcon}
+            />
+          </Pressable>
+        </BottomActionBar>
+
+        {/* Completed Screen Back Warning */}
 
         <AppDialog
           visible={backWarningOpen}
           onClose={() => setBackWarningOpen(false)}
           icon="alert-triangle"
-          title="Cleaning in Progress"
-          message="Please wait while the screen redirects to the next step."
+          title="Cleaning Completed"
+          message="Please discard the contents from the collection bowl and tap NEXT to continue."
           confirmLabel="OK"
           onConfirm={() => setBackWarningOpen(false)}
         />
@@ -318,27 +605,67 @@ const CleaningProcessScreen = ({ navigation, route }) => {
     );
   }
 
-  // Progress View
+  /* ------------------------------------------------------------------------ */
+  /* PROGRESS VIEW                                                            */
+  /* ------------------------------------------------------------------------ */
+
   return (
-    <Screen background={colors.background} edges={['top', 'left', 'right', 'bottom']}>
-      <DeviceOfflineGuard navigation={navigation} serialNumber={serialNumber} />
-      <MainHeader greeting="Machine Status" title="Cleaning Process" onBack={undefined} right={<HeaderMenu />} />
+    <Screen
+      background={colors.background}
+      edges={['top', 'left', 'right', 'bottom']}
+    >
+      <DeviceOfflineGuard
+        navigation={navigation}
+        serialNumber={serialNumber}
+      />
+
+      <MainHeader
+        greeting="Machine Status"
+        title="Cleaning Process"
+        onBack={undefined}
+        right={<HeaderMenu />}
+      />
 
       <View style={styles.content}>
         <ProcessHero />
 
-        <Eyebrow style={{ marginTop: spacing.xxxl }}>Self-Cleaning</Eyebrow>
-        <Text style={styles.title}>Cleaning Process</Text>
-        <Text style={styles.percent}>{progress}% completed</Text>
+        <Eyebrow
+          style={{ marginTop: spacing.xxxl }}
+        >
+          Self-Cleaning
+        </Eyebrow>
+
+        <Text style={styles.title}>
+          Cleaning Process
+        </Text>
+
+        <Text style={styles.percent}>
+          {progress}% completed
+        </Text>
 
         <ProgressBar
           value={progress}
           height={46}
           fillColor={BRAND_GREEN}
-          style={{ marginTop: spacing.xl, alignSelf: 'stretch' }}
+          style={{
+            marginTop: spacing.xl,
+            alignSelf: 'stretch',
+          }}
         />
 
-        <StatusBadge label="Please wait" variant="info" icon="loader" style={{ marginTop: spacing.huge, alignSelf: 'center' }} />
+        {/* UPDATED: Larger Please Wait Badge */}
+
+        <View style={styles.pleaseWaitBadge}>
+          <Feather
+            name="loader"
+            size={26}
+            color={colors.primary}
+          />
+
+          <Text style={styles.pleaseWaitText}>
+            Please wait
+          </Text>
+        </View>
       </View>
 
       <AppDialog
@@ -356,11 +683,16 @@ const CleaningProcessScreen = ({ navigation, route }) => {
 
 export default CleaningProcessScreen;
 
+/* -------------------------------------------------------------------------- */
+/* Styles                                                                     */
+/* -------------------------------------------------------------------------- */
+
 const styles = StyleSheet.create({
   menuOverlay: {
     flex: 1,
     backgroundColor: 'transparent',
   },
+
   menuCard: {
     position: 'absolute',
     right: layout.screenPaddingHorizontal,
@@ -372,16 +704,19 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     ...shadows.card,
   },
+
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
   },
+
   menuItemBorder: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.divider,
   },
+
   menuItemText: {
     fontSize: 15,
     fontWeight: '700',
@@ -394,6 +729,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   centerContent: {
     flex: 1,
     alignItems: 'center',
@@ -407,6 +743,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   glow: {
     position: 'absolute',
     width: 210,
@@ -416,6 +753,7 @@ const styles = StyleSheet.create({
     borderRadius: 105,
     backgroundColor: colors.primaryTint,
   },
+
   ringStatic: {
     position: 'absolute',
     width: 198,
@@ -426,6 +764,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.primarySubtle,
   },
+
   ringArc: {
     position: 'absolute',
     width: 198,
@@ -437,6 +776,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primaryTintBorder,
     borderTopColor: colors.primary,
   },
+
   disc: {
     width: 132,
     height: 132,
@@ -448,6 +788,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.card,
   },
+
   checkCircle: {
     width: 72,
     height: 72,
@@ -465,12 +806,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     letterSpacing: 0.2,
   },
+
   percent: {
     ...typography.subtitle,
     color: colors.primary,
     fontWeight: '800',
     marginTop: spacing.md,
   },
+
   message: {
     ...typography.subtitle,
     color: colors.textSecondary,
@@ -478,5 +821,94 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     lineHeight: 22,
     maxWidth: 320,
+  },
+
+  /* ------------------------------------------------------------------------ */
+  /* UPDATED: Larger Please Wait Badge                                        */
+  /* ------------------------------------------------------------------------ */
+
+  pleaseWaitBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    backgroundColor: colors.primaryTint,
+    borderRadius: 30,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    marginTop: spacing.huge,
+    gap: 10,
+  },
+
+  pleaseWaitText: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+
+  /* ------------------------------------------------------------------------ */
+  /* Highlighted Orange Discard Alert                                         */
+  /* ------------------------------------------------------------------------ */
+
+  discardNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    backgroundColor: '#FFF3CD',
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+    borderRadius: radii.lg,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.xl,
+  },
+
+  discardIcon: {
+    marginRight: spacing.md,
+  },
+
+  discardText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#92400E',
+    lineHeight: 24,
+  },
+
+  /* ------------------------------------------------------------------------ */
+  /* Green NEXT Button                                                        */
+  /* ------------------------------------------------------------------------ */
+
+  doneBottomBar: {
+    paddingTop: 4,
+    paddingBottom: 4,
+  },
+
+  nextButton: {
+    width: '100%',
+    minHeight: 54,
+    backgroundColor: BRAND_GREEN,
+    borderRadius: radii.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+
+  nextButtonPressed: {
+    opacity: 0.85,
+  },
+
+  nextButtonText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+  },
+
+  nextButtonIcon: {
+    marginLeft: spacing.sm,
   },
 });
