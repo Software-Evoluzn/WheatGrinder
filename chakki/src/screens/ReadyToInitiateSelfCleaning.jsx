@@ -211,7 +211,7 @@ const ReadyToInitiateSelfCleaning = ({ navigation, route }) => {
       <View style={styles.content}>
         <ReadyHero />
 
-        <Text style={styles.title}>Ready to start Self-Cleaning</Text>
+        <Text style={styles.title}>Ready to Start Self-Cleaning</Text>
         <Text style={styles.message}>
           Press READY to initiate the Self-Cleaning Process.
         </Text>
@@ -288,8 +288,8 @@ const styles = StyleSheet.create({
   },
 
   hero: {
-    width: 168,
-    height: 168,
+    width: 250,
+    height: 250,
     alignItems: 'center',
     justifyContent: 'center',
   },
